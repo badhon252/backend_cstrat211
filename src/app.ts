@@ -7,7 +7,7 @@ const app = express();
 // required middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static("./public"));
+app.use(express.static("uploads"));
 app.use(cors({ origin: "*" }));
 
 // routes

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import Category from "../models/category.model";
+import { uploadToCloudinary } from "../utils/cloudinary";
 
 // create category
 const createCategory = async (
@@ -9,7 +10,7 @@ const createCategory = async (
   next: NextFunction
 ) => {
   try {
-    const { categoryName, description, categoryImage } = req.body;
+    const { categoryName, description } = req.body;
 
     if (!categoryName) {
       res
@@ -17,6 +18,12 @@ const createCategory = async (
         .json({ status: false, message: "category name is required" });
       return;
     }
+
+    if (!req.file) {
+      res.status(400).json({ message: "category image is required" });
+      return;
+    }
+
     const existingCategory = await Category.findOne({ categoryName });
     if (existingCategory) {
       res
@@ -25,10 +32,12 @@ const createCategory = async (
       return;
     }
 
+    const imageUrl = await uploadToCloudinary(req.file.path);
+
     const newCategory = new Category({
       categoryName,
       description,
-      categoryImage,
+      categoryImage: imageUrl,
     });
     await newCategory.save();
 
@@ -53,6 +62,7 @@ const createCategory = async (
       return;
     }
     res.status(500).json({ status: false, message: "Server error" });
+    return;
   }
 };
 
