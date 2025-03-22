@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import categoryRouter from "./routes/category.routes";
 
 const app = express();
 
@@ -10,5 +11,6 @@ app.use(express.static("./public"));
 app.use(cors({ origin: "*" }));
 
 // routes
+app.use("/api/v1/categories", categoryRouter);
 
 export default app;
