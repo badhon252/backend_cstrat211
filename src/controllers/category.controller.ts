@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import Category from "../models/category.model";
 import { uploadToCloudinary } from "../utils/cloudinary";
+import deleteFromCloudinary from "../utils/deleteFromCloudinary";
 
 // create category
 const createCategory = async (
@@ -135,26 +136,6 @@ const updateCategory = async (
 };
 
 // get all categories
-// const getAllCategories = async (
-//   req: Request,
-//   res: Response,
-//   next: NextFunction
-// ) => {
-//   try {
-//     const categories = await Category.find().sort({ createdAt: -1 });
-
-//     res.status(200).json({
-//       status: true,
-//       message: "all categories retrieved successfully",
-//       data: categories,
-//       count: categories.length,
-//     });
-//     return;
-//   } catch (error) {
-//     res.status(500).json({ status: false, message: "server error" });
-//     return;
-//   }
-// };
 const getAllCategories = async (
   req: Request,
   res: Response,
@@ -262,4 +243,51 @@ const getCategoryById = async (
   }
 };
 
-export { createCategory, updateCategory, getAllCategories, getCategoryById };
+// delete category
+const deleteCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+
+    const deletedCategory = await Category.findByIdAndDelete(id);
+
+    if (!deletedCategory) {
+      res.status(404).json({
+        status: false,
+        message: "category not found",
+      });
+      return;
+    }
+
+    if (deletedCategory.categoryImage) {
+      await deleteFromCloudinary(deletedCategory.categoryImage);
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "category deleted successfully",
+      data: deletedCategory,
+    });
+    return;
+  } catch (error) {
+    if (error instanceof mongoose.Error.CastError) {
+      if (error instanceof mongoose.Error.CastError) {
+        res.status(400).json({ status: false, message: "invalid category id" });
+        return;
+      }
+      res.status(500).json({ status: false, message: "server error" });
+      return;
+    }
+  }
+};
+
+export {
+  createCategory,
+  updateCategory,
+  getAllCategories,
+  getCategoryById,
+  deleteCategory,
+};

@@ -1,6 +1,7 @@
 import express, { Router } from "express";
 import {
   createCategory,
+  deleteCategory,
   getAllCategories,
   getCategoryById,
   updateCategory,
@@ -17,6 +18,7 @@ router
 router
   .route("/:id")
   .put(upload.single("categoryImage"), updateCategory)
-  .get(getCategoryById);
+  .get(getCategoryById)
+  .delete(deleteCategory);
 
 export default router;
