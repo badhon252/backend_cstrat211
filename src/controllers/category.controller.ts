@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import Category from "../models/category.model";
 import { uploadToCloudinary } from "../utils/cloudinary";
+import deleteFromCloudinary from "../utils/deleteFromCloudinary";
 
 // create category
 const createCategory = async (
@@ -10,17 +11,12 @@ const createCategory = async (
   next: NextFunction
 ) => {
   try {
-    const { categoryName, description } = req.body;
+    const { categoryName, description, sales } = req.body;
 
     if (!categoryName) {
       res
         .status(400)
         .json({ status: false, message: "category name is required" });
-      return;
-    }
-
-    if (!req.file) {
-      res.status(400).json({ message: "category image is required" });
       return;
     }
 
@@ -32,12 +28,16 @@ const createCategory = async (
       return;
     }
 
-    const imageUrl = await uploadToCloudinary(req.file.path);
+    let imageUrl;
+    if (req.file) {
+      imageUrl = await uploadToCloudinary(req.file.path);
+    }
 
     const newCategory = new Category({
       categoryName,
       description,
-      categoryImage: imageUrl,
+      ...(imageUrl && { categoryImage: imageUrl }),
+      sales,
     });
     await newCategory.save();
 
@@ -66,4 +66,228 @@ const createCategory = async (
   }
 };
 
-export { createCategory };
+// update category
+const updateCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const { categoryName, description } = req.body;
+
+    const category = await Category.findById(id);
+    if (!category) {
+      res.status(404).json({ status: false, message: "category not found" });
+      return;
+    }
+
+    if (categoryName) {
+      const existingCategory = await Category.findOne({
+        categoryName,
+        _id: { $ne: id },
+      });
+
+      if (existingCategory) {
+        res.status(409).json({
+          status: false,
+          message: "category name already exists",
+        });
+        return;
+      }
+      category.categoryName = categoryName;
+    }
+
+    if (description !== undefined) {
+      category.description = description;
+    }
+
+    if (req.file) {
+      const imageUrl = await uploadToCloudinary(req.file.path);
+      category.categoryImage = imageUrl;
+    }
+    await category.save();
+
+    res.status(200).json({
+      status: true,
+      message: "category updated successfully",
+      data: category,
+    });
+    return;
+  } catch (error) {
+    if (error instanceof mongoose.Error.ValidationError) {
+      res.status(400).json({ status: false, message: error.message });
+      return;
+    }
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as any).code === 11000
+    ) {
+      res.status(409).json({
+        status: false,
+        message: "category name already exists",
+      });
+      return;
+    }
+    res.status(500).json({ status: false, message: "server error" });
+    return;
+  }
+};
+
+// get all categories
+const getAllCategories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { page = "1", limit = "10", search, sales } = req.query;
+
+    const pageNumber = Math.max(1, parseInt(page as string)) || 1;
+    const limitNumber =
+      Math.max(1, Math.min(100, parseInt(limit as string))) || 10;
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const filter: Record<string, any> = {};
+
+    if (search) {
+      filter.categoryName = {
+        $regex: search as string,
+        $options: "i",
+      };
+    }
+
+    if (sales) {
+      if (sales === "true") {
+        filter.sales = { $gt: 0 };
+      } else if (!isNaN(Number(sales))) {
+        filter.sales = { $gte: Number(sales) };
+      }
+    }
+
+    const [total, categories] = await Promise.all([
+      Category.countDocuments(filter),
+      Category.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNumber),
+    ]);
+
+    const totalPages = Math.ceil(total / limitNumber);
+
+    res.status(200).json({
+      status: true,
+      message: "categories retrieved successfully",
+      data: categories,
+      pagination: {
+        totalItems: total,
+        totalPages,
+        currentPage: pageNumber,
+        itemsPerPage: limitNumber,
+        nextPage: pageNumber < totalPages ? pageNumber + 1 : null,
+        prevPage: pageNumber > 1 ? pageNumber - 1 : null,
+      },
+      search: {
+        term: search || null,
+        results: categories.length,
+      },
+    });
+    return;
+  } catch (error) {
+    if (error instanceof Error && error.name === "CastError") {
+      res.status(400).json({
+        status: false,
+        message: "invalid pagination parameters",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      status: false,
+      message: "server error",
+      error: error instanceof Error ? error.message : "unknown error",
+    });
+  }
+};
+
+// get a single category by id
+const getCategoryById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+
+    const category = await Category.findById(id);
+
+    if (!category) {
+      res.status(404).json({ status: false, message: "category not found" });
+      return;
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "category retrieved successfully",
+      data: category,
+    });
+    return;
+  } catch (error) {
+    if (error instanceof mongoose.Error.CastError) {
+      res.status(400).json({ status: false, message: "invalid category id" });
+      return;
+    }
+    res.status(500).json({ status: false, message: "server error" });
+    return;
+  }
+};
+
+// delete category
+const deleteCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+
+    const deletedCategory = await Category.findByIdAndDelete(id);
+
+    if (!deletedCategory) {
+      res.status(404).json({
+        status: false,
+        message: "category not found",
+      });
+      return;
+    }
+
+    if (deletedCategory.categoryImage) {
+      await deleteFromCloudinary(deletedCategory.categoryImage);
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "category deleted successfully",
+      data: deletedCategory,
+    });
+    return;
+  } catch (error) {
+    if (error instanceof mongoose.Error.CastError) {
+      if (error instanceof mongoose.Error.CastError) {
+        res.status(400).json({ status: false, message: "invalid category id" });
+        return;
+      }
+      res.status(500).json({ status: false, message: "server error" });
+      return;
+    }
+  }
+};
+
+export {
+  createCategory,
+  updateCategory,
+  getAllCategories,
+  getCategoryById,
+  deleteCategory,
+};
