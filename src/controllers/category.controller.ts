@@ -66,4 +66,73 @@ const createCategory = async (
   }
 };
 
-export { createCategory };
+// update category
+const updateCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const { categoryName, description } = req.body;
+
+    const category = await Category.findById(id);
+    if (!category) {
+      res.status(404).json({ status: false, message: "category not found" });
+      return;
+    }
+
+    if (categoryName) {
+      const existingCategory = await Category.findOne({
+        categoryName,
+        _id: { $ne: id },
+      });
+
+      if (existingCategory) {
+        res.status(409).json({
+          status: false,
+          message: "category name already exists",
+        });
+        return;
+      }
+      category.categoryName = categoryName;
+    }
+
+    if (description !== undefined) {
+      category.description = description;
+    }
+
+    if (req.file) {
+      const imageUrl = await uploadToCloudinary(req.file.path);
+      category.categoryImage = imageUrl;
+    }
+    await category.save();
+
+    res.status(200).json({
+      status: true,
+      message: "category updated successfully",
+      data: category,
+    });
+    return;
+  } catch (error) {
+    if (error instanceof mongoose.Error.ValidationError) {
+      res.status(400).json({ status: false, message: error.message });
+      return;
+    }
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as any).code === 11000
+    ) {
+      res.status(409).json({
+        status: false,
+        message: "category name already exists",
+      });
+      return;
+    }
+    res.status(500).json({ status: false, message: "server error" });
+    return;
+  }
+};
+
+export { createCategory, updateCategory };
