@@ -3,6 +3,7 @@ import { port } from "./config";
 import dbConfig from "./dbConfig/dbConnection";
 import authRoutes from "./routes/auth.routes";
 
+
 app.use("/api/v1/auth", authRoutes);
 
 // run server
