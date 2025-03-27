@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import categoryRouter from "./routes/category.routes";
+import productRouter from "./routes/product.route"; // Add this import
 
 const app = express();
 
@@ -12,5 +13,6 @@ app.use(cors({ origin: "*" }));
 
 // routes
 app.use("/api/v1/categories", categoryRouter);
+app.use("/api/v1/products", productRouter);
 
 export default app;
