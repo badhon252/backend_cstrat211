@@ -6,6 +6,7 @@ export interface IUser extends mongoose.Document {
   phone?: string;
   gender?: string;
   address?: string;
+  avatar?: string;
   password: string;
   role: "customer" | "admin";
   otp?: string;
@@ -24,8 +25,12 @@ const userSchema = new mongoose.Schema<IUser>(
     },
     gender: {
       type: String,
+      enum: ["male", "female", "other"],
     },
     address: {
+      type: String,
+    },
+    avatar: {
       type: String,
     },
     password: { type: String },
