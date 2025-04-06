@@ -139,35 +139,39 @@ export const updateUserProfile = async (
   try {
     const userId = req.user?.id;
     if (!userId) {
-      res.status(401).json({ message: "unauthorized" });
+      res.status(401).json({ status: false, message: "unauthorized" });
       return;
     }
     const { name, phone, gender, address } = req.body;
 
     if (name && typeof name !== "string") {
-      res.status(400).json({ message: "name must be a string" });
+      res.status(400).json({ status: false, message: "name must be a string" });
       return;
     }
 
     if (phone && typeof phone !== "string") {
-      res.status(400).json({ message: "phone number must be a string" });
+      res
+        .status(400)
+        .json({ status: false, message: "phone number must be a string" });
       return;
     }
 
     if (gender && !["male", "female", "other"].includes(gender.toLowerCase())) {
-      res.status(400).json({ message: "Invalid gender value" });
+      res.status(400).json({ status: false, message: "Invalid gender value" });
       return;
     }
 
     if (address && typeof address !== "string") {
-      res.status(400).json({ message: "address must be a string" });
+      res
+        .status(400)
+        .json({ status: false, message: "address must be a string" });
       return;
     }
 
     const user = await User.findById(userId);
 
     if (!user) {
-      res.status(404).json({ message: "user not found" });
+      res.status(404).json({ status: false, message: "user not found" });
       return;
     }
 
@@ -179,6 +183,7 @@ export const updateUserProfile = async (
     await user.save();
 
     res.status(200).json({
+      status: true,
       message: "profile updated successfully",
       user: {
         name: user.name,
@@ -191,7 +196,7 @@ export const updateUserProfile = async (
     });
   } catch (error) {
     console.error("Update Profile Error:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ status: false, message: "Internal Server Error" });
   }
 };
 
@@ -229,6 +234,90 @@ export const uploadAvatar = async (
     return;
   } catch (error) {
     res.status(500).json({ status: false, message: "server error" });
+    return;
+  }
+};
+
+// get all users
+export const getAllUsers = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    const searchName = req.query.name as string;
+    const searchPhone = req.query.phone as string;
+
+    const sortBy = (req.query.sortBy as string) || "createdAt";
+    const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+
+    const query: any = {};
+
+    if (searchName) {
+      query.name = { $regex: searchName, $options: "i" };
+    }
+
+    if (searchPhone) {
+      query.phone = { $regex: searchPhone, $options: "i" };
+    }
+
+    const totalUsers = await User.countDocuments(query);
+
+    const users = await User.find(query)
+      .sort({ [sortBy]: sortOrder })
+      .skip(skip)
+      .limit(limit)
+      .select("name email phone gender role avatar createdAt");
+
+    const totalPages = Math.ceil(totalUsers / limit);
+
+    res.status(200).json({
+      status: true,
+      message: "fetched all users successfully",
+      users,
+      pagination: {
+        totalUsers,
+        currentPage: page,
+        totalPages,
+        limit,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: false,
+      message: "server error",
+    });
+    return;
+  }
+};
+
+// get a single user
+export const getUserById = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId).select(
+      "name email phone gender address avatar role createdAt"
+    );
+
+    if (!user) {
+      res.status(404).json({
+        status: false,
+        message: "user not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      status: true,
+      message: "user fetched successfully",
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+    });
     return;
   }
 };

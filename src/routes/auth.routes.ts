@@ -8,6 +8,8 @@ import {
   logout,
   updateUserProfile,
   uploadAvatar,
+  getAllUsers,
+  getUserById,
 } from "../controllers/auth.controller";
 import { isLoggedIn } from "../middlewares/isLoggedIn";
 import upload from "../utils/multer";
@@ -26,6 +28,8 @@ router.post(
   upload.single("avatar"),
   uploadAvatar as express.RequestHandler
 );
+router.get("/users", getAllUsers as express.RequestHandler);
+router.get("/users/:id", getUserById as express.RequestHandler);
 router.post("/logout", logout as express.RequestHandler);
 
 export default router;
