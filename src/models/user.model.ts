@@ -4,6 +4,8 @@ export interface IUser extends mongoose.Document {
   name: string;
   email: string;
   phone?: string;
+  gender?: string;
+  address?: string;
   password: string;
   role: "customer" | "admin";
   otp?: string;
@@ -12,10 +14,21 @@ export interface IUser extends mongoose.Document {
 
 const userSchema = new mongoose.Schema<IUser>(
   {
-    name: { type: String,  },
-    email: { type: String,  unique: true },
-    phone: { type: String, required: function () { return this.role === "customer"; }},
-    password: { type: String,},
+    name: { type: String },
+    email: { type: String, unique: true },
+    phone: {
+      type: String,
+      required: function () {
+        return this.role === "customer";
+      },
+    },
+    gender: {
+      type: String,
+    },
+    address: {
+      type: String,
+    },
+    password: { type: String },
     role: { type: String, enum: ["customer", "admin"], required: true },
     otp: { type: String },
     otpExpire: { type: Date },

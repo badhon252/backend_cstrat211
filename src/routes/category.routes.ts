@@ -1,4 +1,4 @@
-import express, { Router } from "express";
+import { Router } from "express";
 import {
   createCategory,
   deleteCategory,
@@ -7,18 +7,20 @@ import {
   updateCategory,
 } from "../controllers/category.controller";
 import upload from "../utils/multer";
+import { isLoggedIn } from "../middlewares/isLoggedIn";
+import { checkAdmin } from "../middlewares/checkAdmin";
 
 const router = Router();
 
 router
   .route("/")
-  .post(upload.single("categoryImage"), createCategory)
+  .post(isLoggedIn, checkAdmin, upload.single("categoryImage"), createCategory)
   .get(getAllCategories);
 
 router
   .route("/:id")
-  .put(upload.single("categoryImage"), updateCategory)
+  .put(isLoggedIn, checkAdmin, upload.single("categoryImage"), updateCategory)
   .get(getCategoryById)
-  .delete(deleteCategory);
+  .delete(isLoggedIn, checkAdmin, deleteCategory);
 
 export default router;
