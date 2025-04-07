@@ -14,7 +14,11 @@ const storage = multer.diskStorage({
   },
 });
 
-const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (
+  req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
   const filetypes = /jpeg|jpg|png|gif|mp4|mov|avi|webm/;
   const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = filetypes.test(file.mimetype);
@@ -22,52 +26,19 @@ const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.
   if (extname && mimetype) {
     return cb(null, true);
   } else {
-    cb(new Error("Only image (jpeg, jpg, png, gif) and video (mp4, mov, avi, webm) files are allowed!"));
+    cb(
+      new Error(
+        "Only image (jpeg, jpg, png, gif) and video (mp4, mov, avi, webm) files are allowed!"
+      )
+    );
   }
 };
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit
+    fileSize: 100 * 1024 * 1024,
   },
 });
 
 export default upload;
-
-
-
-
-
-
-
-
-
-// import multer from "multer";
-// import { v4 as uuidv4 } from "uuid";
-
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     cb(null, "uploads/");
-//   },
-//   filename: function (req, file, cb) {
-//     const ext = file.originalname.split(".").pop();
-//     cb(null, `${uuidv4()}.${ext}`);
-//   },
-// });
-
-// const fileFilter = (req: any, file: any, cb: any) => {
-//   if (file.mimetype.startsWith("image/")) {
-//     cb(null, true);
-//   } else {
-//     cb(new Error("Only image files are allowed!"), false);
-//   }
-// };
-
-// const upload = multer({
-//   storage,
-//   fileFilter,
-//   limits: { fileSize: 10 * 1024 * 1024 },
-// });
-
-// export default upload;
