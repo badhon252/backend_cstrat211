@@ -1,11 +1,7 @@
 import express from "express";
 import {
-  createProduct,
-  getAllProducts,
-  getProductById,
-  updateProduct,
-  deleteProduct,
-  deleteProductMedia,
+  createProduct,getAllProducts,getSingleProduct,updateProduct,deleteProduct
+
 } from "../controllers/product.controller";
 import upload from "../utils/multer";
 
@@ -21,15 +17,16 @@ router.post(
   createProduct
 );
 
+
 // Get All Products
 router.get("/getallproducts", getAllProducts);
 
-// Get Single Product
-router.get("/getallproducts/:id", getProductById);
+// Get Product by ID
+router.get("/getallproducts/:id", getSingleProduct);
 
 // Update Product
 router.put(
-  "/getallproducts/:id",
+  "/updateProduct/:id",
   upload.fields([
     { name: "images", maxCount: 10 },
     { name: "videos", maxCount: 5 },
@@ -38,9 +35,7 @@ router.put(
 );
 
 // Delete Product
-router.delete("/getallproducts/:id", deleteProduct);
+router.delete("/deleteproduct/:id", deleteProduct);
 
-// Delete Product Media
-router.delete("/:id/media/:mediaType/:mediaUrl", deleteProductMedia);
 
 export default router;
