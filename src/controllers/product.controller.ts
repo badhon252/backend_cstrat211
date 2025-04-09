@@ -19,6 +19,7 @@ const sendResponse = (
 
 export const createProduct = async (req: Request, res: Response) => {
   try {
+    // Validate required fields
     const requiredFields = [
       "name",
       "description",
@@ -46,13 +47,10 @@ export const createProduct = async (req: Request, res: Response) => {
       Subcategory.findById(req.body.subcategory),
     ]);
 
-    if (!category) {
-      return sendResponse(res, 400, false, "Invalid category ID");
-    }
-    if (!subcategory) {
+    if (!category) return sendResponse(res, 400, false, "Invalid category ID");
+    if (!subcategory)
       return sendResponse(res, 400, false, "Invalid subcategory ID");
-    }
-  if (subcategory.category.toString() !== (category as any)._id.toString()) {
+    if (subcategory.category.toString() !== (category as any)._id.toString()) {
       return sendResponse(
         res,
         400,
@@ -62,21 +60,32 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     // Parse isCustomizable
-    const isCustomizable = req.body.isCustomizable === "true" || req.body.isCustomizable === true;
+    const isCustomizable =
+      req.body.isCustomizable === "true" || req.body.isCustomizable === true;
 
-    // Handle file uploads for non-customizable products
+    // Handle media uploads
     let imageUrls: string[] = [];
     let videoUrls: string[] = [];
     if (!isCustomizable) {
-      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const files = req.files as
+        | { [fieldname: string]: Express.Multer.File[] }
+        | undefined;
       const imageFiles = files?.images || [];
       const videoFiles = files?.videos || [];
 
       if (imageFiles.length === 0) {
-        return sendResponse(res, 400, false, "At least one image is required for non-customizable products");
+        return sendResponse(
+          res,
+          400,
+          false,
+          "At least one image is required for non-customizable products"
+        );
       }
 
-      const uploadMedia = async (files: Express.Multer.File[], type: "image" | "video") => {
+      const uploadMedia = async (
+        files: Express.Multer.File[],
+        type: "image" | "video"
+      ) => {
         const urls: string[] = [];
         for (const file of files) {
           try {
@@ -110,48 +119,115 @@ export const createProduct = async (req: Request, res: Response) => {
     let sizes: string[] = [];
     let colors: any[] = [];
     if (isCustomizable) {
+      // Process sizes
       if (req.body.sizes) {
-        sizes = Array.isArray(req.body.sizes) ? req.body.sizes : req.body.sizes.split(",");
+        sizes = Array.isArray(req.body.sizes)
+          ? req.body.sizes
+          : req.body.sizes.split(",");
         if (sizes.length === 0) {
-          return sendResponse(res, 400, false, "Sizes must not be empty for customizable products");
+          return sendResponse(
+            res,
+            400,
+            false,
+            "Sizes must not be empty for customizable products"
+          );
         }
       } else {
-        return sendResponse(res, 400, false, "Sizes are required for customizable products");
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Sizes are required for customizable products"
+        );
       }
 
+      // Process colors
       if (req.body.colors) {
         try {
-          colors = typeof req.body.colors === "string" ? JSON.parse(req.body.colors) : req.body.colors;
+          colors =
+            typeof req.body.colors === "string"
+              ? JSON.parse(req.body.colors)
+              : req.body.colors;
+
           if (!Array.isArray(colors) || colors.length === 0) {
-            return sendResponse(res, 400, false, "Colors must be a non-empty array for customizable products");
+            return sendResponse(
+              res,
+              400,
+              false,
+              "Colors must be a non-empty array for customizable products"
+            );
           }
-          for (const color of colors) {
+
+          // Handle color images upload
+          const files = req.files as
+            | { [fieldname: string]: Express.Multer.File[] }
+            | undefined;
+
+          for (let i = 0; i < colors.length; i++) {
+            const color = colors[i];
             if (!color.name || !color.hex) {
-              return sendResponse(res, 400, false, "Each color must have a name and hex value");
+              return sendResponse(
+                res,
+                400,
+                false,
+                "Each color must have a name and hex value"
+              );
             }
-            if (color.images && typeof color.images !== "object") {
-              return sendResponse(res, 400, false, "Color images must be an object");
-            }
+
+            // Get all files for this color index (e.g., colorImages[0])
+            const colorImageFiles = files?.[`colorImages[${i}]`] || [];
+
+            // Upload all images for this color
+            const uploadedImages = await Promise.all(
+              colorImageFiles.map(async (file) => {
+                try {
+                  const folder = `products/colors/${color.name.toLowerCase()}`;
+                  const url = await uploadToCloudinary(file.path, folder);
+                  await fs.unlink(file.path).catch(() => {});
+                  return url;
+                } catch (error) {
+                  console.error(
+                    `Error uploading image for color ${color.name}:`,
+                    error
+                  );
+                  throw new Error(
+                    `Failed to upload image for color ${color.name}`
+                  );
+                }
+              })
+            );
+
+            color.images = uploadedImages;
           }
         } catch (error) {
+          console.error("Error processing colors:", error);
           return sendResponse(res, 400, false, "Invalid color variants format");
         }
       } else {
-        return sendResponse(res, 400, false, "Colors are required for customizable products");
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Colors are required for customizable products"
+        );
       }
     }
 
-    // Generate a unique SKU if not provided
-    const sku = req.body.sku || `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    // Generate SKU
+    const sku =
+      req.body.sku ||
+      `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
     // Create new product
     const newProduct = new Product({
       name: req.body.name,
       description: req.body.description,
       price: parseFloat(req.body.price),
+      discountParcentage: req.body.discountParcentage,
       category: req.body.category,
       subcategory: req.body.subcategory,
       type: req.body.type,
+      status: req.body.status || "draft", // Default to "draft" if not provided
       sustainability: req.body.sustainability || "none",
       rating: req.body.rating ? parseFloat(req.body.rating) : 0,
       reviewCount: req.body.reviewCount ? parseInt(req.body.reviewCount) : 0,
@@ -169,7 +245,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
     await newProduct.save();
 
-    // Populate category and subcategory
+    // Populate and format response
     const populatedProduct = await Product.findById(newProduct._id)
       .populate({
         path: "category",
@@ -184,15 +260,16 @@ export const createProduct = async (req: Request, res: Response) => {
       throw new Error("Failed to retrieve populated product");
     }
 
-    // Format response
     const responseProduct = {
       id: populatedProduct._id,
       name: populatedProduct.name,
       description: populatedProduct.description,
       price: populatedProduct.price,
+      discountParcentage: populatedProduct.discountParcentage,
       category: (populatedProduct.category as any)?.categoryName || "",
       subcategory: (populatedProduct.subcategory as any)?.subCategoryName || "",
       type: populatedProduct.type,
+      status: populatedProduct.status,
       sustainability: populatedProduct.sustainability,
       rating: populatedProduct.rating,
       reviewCount: populatedProduct.reviewCount,
@@ -203,29 +280,53 @@ export const createProduct = async (req: Request, res: Response) => {
       isCustomizable: populatedProduct.isCustomizable,
       media: populatedProduct.media,
       sizes: populatedProduct.sizes,
-      colors: populatedProduct.colors,
+      colors: populatedProduct.colors.map((color) => ({
+        name: color.name,
+        hex: color.hex,
+        images: color.images,
+        _id: color._id,
+      })),
       sku: populatedProduct.sku,
     };
 
-    return sendResponse(res, 201, true, "Product created successfully", responseProduct);
+    return sendResponse(
+      res,
+      201,
+      true,
+      "Product created successfully",
+      responseProduct
+    );
   } catch (error) {
     console.error("Error creating product:", error);
 
-    // Clean up temporary files
+    // Clean up files
     if (req.files) {
       const files = Object.values(req.files).flat() as Express.Multer.File[];
-      await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => {})));
+      await Promise.all(
+        files.map((file) => fs.unlink(file.path).catch(() => {}))
+      );
     }
 
+    // Error handling
     if (error instanceof mongoose.Error.ValidationError) {
       const messages = Object.values(error.errors).map((err) => err.message);
-      return sendResponse(res, 400, false, `Validation error: ${messages.join(", ")}`);
+      return sendResponse(
+        res,
+        400,
+        false,
+        `Validation error: ${messages.join(", ")}`
+      );
     }
     if (error instanceof mongoose.Error.CastError) {
       return sendResponse(res, 400, false, "Invalid ID format");
     }
     if ((error as any).code === 11000) {
-      return sendResponse(res, 409, false, "Product with this SKU or name already exists");
+      return sendResponse(
+        res,
+        409,
+        false,
+        "Product with this SKU or name already exists"
+      );
     }
     return sendResponse(res, 500, false, "Server error while creating product");
   }
@@ -303,6 +404,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
       category: (product.category as any)?.categoryName || "",
       subcategory: (product.subcategory as any)?.subCategoryName || "",
       type: product.type,
+      status: product.status,
       sustainability: product.sustainability,
       rating: product.rating,
       reviewCount: product.reviewCount,
@@ -325,10 +427,21 @@ export const getAllProducts = async (req: Request, res: Response) => {
       totalPages: Math.ceil(total / limitNum),
     };
 
-    return sendResponse(res, 200, true, "Products retrieved successfully", response);
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Products retrieved successfully",
+      response
+    );
   } catch (error) {
     console.error("Error retrieving products:", error);
-    return sendResponse(res, 500, false, "Server error while retrieving products");
+    return sendResponse(
+      res,
+      500,
+      false,
+      "Server error while retrieving products"
+    );
   }
 };
 
@@ -349,7 +462,13 @@ export const getSingleProduct = async (req: Request, res: Response) => {
       return sendResponse(res, 404, false, "Product not found");
     }
 
-    return sendResponse(res, 200, true, "Product fetched successfully", product);
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Product fetched successfully",
+      product
+    );
   } catch (error) {
     console.error("Error fetching product:", error);
     return sendResponse(res, 500, false, "Server error while fetching product");
@@ -370,20 +489,25 @@ export const updateProduct = async (req: Request, res: Response) => {
       return sendResponse(res, 404, false, "Product not found");
     }
 
-    // Parse isCustomizable from request or keep existing
+    // Parse isCustomizable
     const isCustomizable = req.body.isCustomizable
       ? req.body.isCustomizable === "true" || req.body.isCustomizable === true
       : product.isCustomizable;
 
-    // Handle file uploads for non-customizable products
+    // Handle media uploads for non-customizable products
     let imageUrls = product.media.images;
     let videoUrls = product.media.videos;
     if (!isCustomizable && req.files) {
-      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const files = req.files as
+        | { [fieldname: string]: Express.Multer.File[] }
+        | undefined;
       const imageFiles = files?.images || [];
       const videoFiles = files?.videos || [];
 
-      const uploadMedia = async (files: Express.Multer.File[], type: "image" | "video") => {
+      const uploadMedia = async (
+        files: Express.Multer.File[],
+        type: "image" | "video"
+      ) => {
         const urls: string[] = [];
         for (const file of files) {
           try {
@@ -401,9 +525,17 @@ export const updateProduct = async (req: Request, res: Response) => {
 
       try {
         if (imageFiles.length > 0) {
+          // Delete old images
+          await Promise.all(
+            imageUrls.map((url) => deleteFromCloudinary(url).catch(() => {}))
+          );
           imageUrls = await uploadMedia(imageFiles, "image");
         }
         if (videoFiles.length > 0) {
+          // Delete old videos
+          await Promise.all(
+            videoUrls.map((url) => deleteFromCloudinary(url).catch(() => {}))
+          );
           videoUrls = await uploadMedia(videoFiles, "video");
         }
       } catch (error) {
@@ -419,59 +551,150 @@ export const updateProduct = async (req: Request, res: Response) => {
     let sizes = product.sizes;
     let colors = product.colors;
     if (isCustomizable) {
+      // Process sizes
       if (req.body.sizes) {
-        sizes = Array.isArray(req.body.sizes) ? req.body.sizes : req.body.sizes.split(",");
+        sizes = Array.isArray(req.body.sizes)
+          ? req.body.sizes
+          : req.body.sizes.split(",");
       }
+
+      // Process colors
       if (req.body.colors) {
         try {
-          colors = typeof req.body.colors === "string" ? JSON.parse(req.body.colors) : req.body.colors;
-          if (!Array.isArray(colors)) {
+          const newColors =
+            typeof req.body.colors === "string"
+              ? JSON.parse(req.body.colors)
+              : req.body.colors;
+
+          if (!Array.isArray(newColors)) {
             return sendResponse(res, 400, false, "Colors must be an array");
           }
-          for (const color of colors) {
-            if (!color.name || !color.hex) {
-              return sendResponse(res, 400, false, "Each color must have a name and hex value");
-            }
-            if (color.images && typeof color.images !== "object") {
-              return sendResponse(res, 400, false, "Color images must be an object");
-            }
-          }
+
+          const files = req.files as
+            | { [fieldname: string]: Express.Multer.File[] }
+            | undefined;
+
+          // Process each color with its images
+          colors = await Promise.all(
+            newColors.map(async (newColor: any, index: number) => {
+              if (!newColor.name || !newColor.hex) {
+                throw new Error("Each color must have a name and hex value");
+              }
+
+              // Find existing color
+              const existingColor = product.colors.find(
+                (c) =>
+                  c?._id?.toString() === newColor._id?.toString() ||
+                  (c.name === newColor.name && c.hex === newColor.hex)
+              );
+
+              // Get files for this color index
+              const colorImageFiles = files?.[`colorImages[${index}]`] || [];
+
+              // Handle images
+              let images = existingColor?.images || [];
+              if (colorImageFiles.length > 0) {
+                // Delete old images if they exist
+                if (existingColor?.images?.length) {
+                  await Promise.all(
+                    existingColor.images.map((url) =>
+                      deleteFromCloudinary(url).catch(() => {})
+                    )
+                  );
+                }
+
+                // Upload new images
+                images = await Promise.all(
+                  colorImageFiles.map(async (file) => {
+                    const folder = `products/colors/${newColor.name.toLowerCase()}`;
+                    const url = await uploadToCloudinary(file.path, folder);
+                    await fs.unlink(file.path).catch(() => {});
+                    return url;
+                  })
+                );
+              }
+
+              return {
+                name: newColor.name,
+                hex: newColor.hex,
+                images,
+                _id: existingColor?._id || new mongoose.Types.ObjectId(),
+              };
+            })
+          );
         } catch (error) {
-          return sendResponse(res, 400, false, "Invalid color variants format");
+          console.error("Error processing colors:", error);
+          return sendResponse(
+            res,
+            400,
+            false,
+            error instanceof Error
+              ? error.message
+              : "Invalid color variants format"
+          );
         }
       }
     }
 
-    // Update only provided fields
-    const updateData: any = {};
-    if (req.body.name) updateData.name = req.body.name;
-    if (req.body.description) updateData.description = req.body.description;
-    if (req.body.price) updateData.price = parseFloat(req.body.price);
+    // Prepare update data
+    const updateData: any = {
+      name: req.body.name || product.name,
+      description: req.body.description || product.description,
+      price: req.body.price ? parseFloat(req.body.price) : product.price,
+      discountParcentage: req.body.discountParcentage,
+      type: req.body.type || product.type,
+      status: req.body.status || product.status,
+      sustainability: req.body.sustainability || product.sustainability,
+      rating: req.body.rating ? parseFloat(req.body.rating) : product.rating,
+      reviewCount: req.body.reviewCount
+        ? parseInt(req.body.reviewCount)
+        : product.reviewCount,
+      popularity: req.body.popularity
+        ? parseInt(req.body.popularity)
+        : product.popularity,
+      quantity: req.body.quantity
+        ? parseInt(req.body.quantity)
+        : product.quantity,
+      isCustomizable,
+      media: {
+        images: isCustomizable ? [] : imageUrls,
+        videos: isCustomizable ? [] : videoUrls,
+      },
+      sizes: isCustomizable ? sizes : [],
+      colors: isCustomizable ? colors : [],
+    };
+
+    // Handle category and subcategory
     if (req.body.category) {
       const category = await Category.findById(req.body.category);
-      if (!category) return sendResponse(res, 400, false, "Invalid category ID");
+      if (!category)
+        return sendResponse(res, 400, false, "Invalid category ID");
       updateData.category = req.body.category;
     }
+
     if (req.body.subcategory) {
       const subcategory = await Subcategory.findById(req.body.subcategory);
-      if (!subcategory) return sendResponse(res, 400, false, "Invalid subcategory ID");
-      if (subcategory.category.toString() !== (updateData.category || product.category).toString()) {
-        return sendResponse(res, 400, false, "Subcategory does not belong to the specified category");
+      if (!subcategory)
+        return sendResponse(res, 400, false, "Invalid subcategory ID");
+
+      const categoryId = updateData.category || product.category;
+      if (subcategory.category.toString() !== categoryId.toString()) {
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Subcategory does not belong to the specified category"
+        );
       }
       updateData.subcategory = req.body.subcategory;
     }
-    if (req.body.type) updateData.type = req.body.type;
-    if (req.body.sustainability) updateData.sustainability = req.body.sustainability;
-    if (req.body.rating) updateData.rating = parseFloat(req.body.rating);
-    if (req.body.reviewCount) updateData.reviewCount = parseInt(req.body.reviewCount);
-    if (req.body.popularity) updateData.popularity = parseInt(req.body.popularity);
-    if (req.body.quantity) updateData.quantity = parseInt(req.body.quantity);
-    if (req.body.sku) updateData.sku = req.body.sku;
-    updateData.isCustomizable = isCustomizable;
-    updateData.media = { images: isCustomizable ? [] : imageUrls, videos: isCustomizable ? [] : videoUrls };
-    updateData.sizes = isCustomizable ? sizes : [];
-    updateData.colors = isCustomizable ? colors : [];
 
+    // Handle SKU
+    if (req.body.sku) {
+      updateData.sku = req.body.sku;
+    }
+
+    // Update product
     const updatedProduct = await Product.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
@@ -489,14 +712,17 @@ export const updateProduct = async (req: Request, res: Response) => {
       return sendResponse(res, 404, false, "Product not found after update");
     }
 
+    // Format response
     const responseProduct = {
       id: updatedProduct._id,
       name: updatedProduct.name,
       description: updatedProduct.description,
       price: updatedProduct.price,
+      discountParcentage: updatedProduct.discountParcentage,
       category: (updatedProduct.category as any)?.categoryName || "",
       subcategory: (updatedProduct.subcategory as any)?.subCategoryName || "",
       type: updatedProduct.type,
+      status: updatedProduct.status,
       sustainability: updatedProduct.sustainability,
       rating: updatedProduct.rating,
       reviewCount: updatedProduct.reviewCount,
@@ -507,19 +733,40 @@ export const updateProduct = async (req: Request, res: Response) => {
       isCustomizable: updatedProduct.isCustomizable,
       media: updatedProduct.media,
       sizes: updatedProduct.sizes,
-      colors: updatedProduct.colors,
+      colors: updatedProduct.colors.map((color) => ({
+        name: color.name,
+        hex: color.hex,
+        images: color.images,
+        _id: color._id,
+      })),
       sku: updatedProduct.sku,
     };
 
-    return sendResponse(res, 200, true, "Product updated successfully", responseProduct);
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Product updated successfully",
+      responseProduct
+    );
   } catch (error) {
     console.error("Error updating product:", error);
+
+    // Clean up files
     if (req.files) {
       const files = Object.values(req.files).flat() as Express.Multer.File[];
-      await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => {})));
+      await Promise.all(
+        files.map((file) => fs.unlink(file.path).catch(() => {}))
+      );
     }
+
     if ((error as any).code === 11000) {
-      return sendResponse(res, 409, false, "Product with this SKU or name already exists");
+      return sendResponse(
+        res,
+        409,
+        false,
+        "Product with this SKU or name already exists"
+      );
     }
     return sendResponse(res, 500, false, "Server error while updating product");
   }
@@ -542,8 +789,12 @@ export const deleteProduct = async (req: Request, res: Response) => {
     // Delete associated media from Cloudinary if non-customizable
     if (!product.isCustomizable) {
       const deletePromises = [
-        ...product.media.images.map((url) => deleteFromCloudinary(url).catch(() => {})),
-        ...product.media.videos.map((url) => deleteFromCloudinary(url).catch(() => {})),
+        ...product.media.images.map((url) =>
+          deleteFromCloudinary(url).catch(() => {})
+        ),
+        ...product.media.videos.map((url) =>
+          deleteFromCloudinary(url).catch(() => {})
+        ),
       ];
       await Promise.all(deletePromises);
     }
