@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose";
+import mongoose, { SortOrder } from "mongoose";
 import Product from "../models/product.model";
 import Category from "../models/category.model";
 import Subcategory from "../models/subCategory.model";
@@ -806,4 +806,199 @@ export const deleteProduct = async (req: Request, res: Response) => {
     console.error("Error deleting product:", error);
     return sendResponse(res, 500, false, "Server error while deleting product");
   }
+};
+
+export const getFilteredProducts = async (req: Request, res: Response) => {
+  try {
+    // Extract query parameters
+    const {
+      category,           // Category ID or name
+      subcategory,       // Subcategory ID or name
+      minPrice,         // Minimum price
+      maxPrice,         // Maximum price
+      page = "1",       // Pagination page
+      limit = "20",     // Items per page
+      sortBy = "createdAt", // Sort field
+      order = "desc"    // Sort order (asc/desc)
+    } = req.query;
+
+    // Build query object
+    const query: any = {};
+
+    // Filter by category
+    if (category) {
+      let categoryDoc;
+      // Check if category is an ID or name
+      if (mongoose.Types.ObjectId.isValid(category as string)) {
+        categoryDoc = await Category.findById(category);
+      } else {
+        categoryDoc = await Category.findOne({
+          categoryName: { $regex: new RegExp(category as string, "i") },
+        });
+      }
+      
+      if (!categoryDoc) {
+        return sendResponse(res, 404, false, "Category not found");
+      }
+      query.category = categoryDoc._id;
+    }
+
+    // Filter by subcategory
+    if (subcategory) {
+      let subcategoryDoc;
+      // Check if subcategory is an ID or name
+      if (mongoose.Types.ObjectId.isValid(subcategory as string)) {
+        subcategoryDoc = await Subcategory.findById(subcategory);
+      } else {
+        subcategoryDoc = await Subcategory.findOne({
+          subCategoryName: { $regex: new RegExp(subcategory as string, "i") },
+        });
+      }
+      
+      if (!subcategoryDoc) {
+        return sendResponse(res, 404, false, "Subcategory not found");
+      }
+      
+      // Validate subcategory belongs to category if both are provided
+      if (query.category && subcategoryDoc.category.toString() !== query.category.toString()) {
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Subcategory does not belong to the specified category"
+        );
+      }
+      query.subcategory = subcategoryDoc._id;
+    }
+
+    // Filter by price range
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) {
+        const min = parseFloat(minPrice as string);
+        if (isNaN(min) || min < 0) {
+          return sendResponse(res, 400, false, "Invalid minimum price");
+        }
+        query.price.$gte = min;
+      }
+      if (maxPrice) {
+        const max = parseFloat(maxPrice as string);
+        if (isNaN(max) || max < 0) {
+          return sendResponse(res, 400, false, "Invalid maximum price");
+        }
+        query.price.$lte = max;
+      }
+      // Validate minPrice is not greater than maxPrice
+      if (minPrice && maxPrice && query.price.$gte > query.price.$lte) {
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Minimum price cannot be greater than maximum price"
+        );
+      }
+    }
+
+    // Pagination and sorting
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+    const sortOrder = order === "asc" ? 1 : -1;
+
+    // Valid sort fields
+    const validSortFields = [
+      "createdAt",
+      "price",
+      "rating",
+      "popularity",
+      "name"
+    ];
+    const sortField = validSortFields.includes(sortBy as string) 
+      ? sortBy 
+      : "createdAt";
+
+    // Create sort object
+    const sortObject: { [key: string]: SortOrder } = { [sortField as string]: sortOrder };
+
+    // Fetch products with pagination and populate category/subcategory
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        .populate({
+          path: "category",
+          select: "categoryName description",
+        })
+        .populate({
+          path: "subcategory",
+          select: "subCategoryName description",
+        })
+        .sort(sortObject)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Product.countDocuments(query),
+    ]);
+
+    // Format response
+    const responseProducts = products.map((product) => ({
+      id: product._id,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      discountParcentage: product.discountParcentage,
+      category: (product.category as any)?.categoryName || "",
+      subcategory: (product.subcategory as any)?.subCategoryName || "",
+      type: product.type,
+      status: product.status,
+      sustainability: product.sustainability,
+      rating: product.rating,
+      reviewCount: product.reviewCount,
+      popularity: product.popularity,
+      quantity: product.quantity,
+      inStock: product.inStock,
+      createdAt: product.createdAt,
+      isCustomizable: product.isCustomizable,
+      media: product.media,
+      sizes: product.sizes,
+      colors: product.colors,
+      sku: product.sku,
+    }));
+
+    const response = {
+      products: responseProducts,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+      filtersApplied: {
+        category: category || null,
+        subcategory: subcategory || null,
+        priceRange: {
+          min: minPrice ? parseFloat(minPrice as string) : null,
+          max: maxPrice ? parseFloat(maxPrice as string) : null,
+        },
+      },
+    };
+
+    return sendResponse(
+      res,
+      200,
+      true,
+      "Products filtered successfully",
+      response
+    );
+  } catch (error) {
+    console.error("Error filtering products:", error);
+    
+    if (error instanceof mongoose.Error.CastError) {
+      return sendResponse(res, 400, false, "Invalid ID format");
+    }
+    
+    return sendResponse(
+      res,
+      500,
+      false,
+      "Server error while filtering products"
+    );
+  }
+
 };

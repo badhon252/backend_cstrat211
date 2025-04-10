@@ -5,6 +5,7 @@ import {
   getSingleProduct,
   updateProduct,
   deleteProduct,
+  getFilteredProducts,
 } from "../controllers/product.controller";
 import upload from "../utils/multer";
 
@@ -42,5 +43,10 @@ router.put(
 
 // Delete Product
 router.delete("/deleteproduct/:id", deleteProduct);
+
+
+// Get Products by Category
+// In your routes file
+router.get('/filter', getFilteredProducts);
 
 export default router;
