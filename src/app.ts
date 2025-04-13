@@ -4,6 +4,8 @@ import categoryRouter from "./routes/category.routes";
 import productRouter from "./routes/product.route";
 import subCategoryRouter from "./routes/subCategory.routes";
 import contactRouter from "./routes/contactRoutes";
+import orderRouter from "./routes/order.routes";
+
 
 const app = express();
 
@@ -18,5 +20,7 @@ app.use("/api/v1/categories", categoryRouter);
 app.use("/api/v1/subcategories", subCategoryRouter);
 app.use("/api/v1/products", productRouter);
 app.use("/api/v1/contact", contactRouter);
+app.use("/api/v1/orders", orderRouter);
+
 
 export default app;
