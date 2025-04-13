@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { IUser } from "./user.model";
 import { IProduct } from "./product.model";
+import { IDelivery } from "./delivery.model";
 
 export interface IOrder extends mongoose.Document {
   user: mongoose.Types.ObjectId | IUser;
@@ -12,6 +13,7 @@ export interface IOrder extends mongoose.Document {
   totalAmount: number;
   status: "pending" | "processing" | "paid" | "shipped" | "delivered" | "cancelled";
   orderSlug: string;
+  delivery?: mongoose.Types.ObjectId | IDelivery;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -51,6 +53,10 @@ const orderSchema = new mongoose.Schema<IOrder>(
       type: String,
       enum: ["pending", "processing", "paid", "shipped", "delivered", "cancelled"],
       default: "pending",
+    },
+    delivery: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Delivery"
     },
     orderSlug: {
       type: String,

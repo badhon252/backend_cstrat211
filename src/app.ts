@@ -6,6 +6,8 @@ import subCategoryRouter from "./routes/subCategory.routes";
 import contactRouter from "./routes/contactRoutes";
 import orderRouter from "./routes/order.routes";
 import paymentRouter from "./routes/payment.routes";
+import deliveryRouter from "./routes/delivery.routes";
+
 
 const app = express();
 
@@ -22,6 +24,7 @@ app.use("/api/v1/products", productRouter);
 app.use("/api/v1/contact", contactRouter);
 app.use("/api/v1/orders", orderRouter);
 app.use("/api/v1/payments", paymentRouter);
+app.use("/api/v1/deliveries", deliveryRouter);
 
 
 export default app;
