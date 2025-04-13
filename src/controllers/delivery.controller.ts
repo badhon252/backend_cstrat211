@@ -38,7 +38,9 @@ export const createDelivery = async (req: Request, res: Response) => {
     res.status(201).json({ 
       status: true, 
       message: "Delivery created successfully",
-      data: delivery 
+      data: delivery,
+      //show the amount of the order
+      orderAmount: typeof order === 'object' && 'totalAmount' in order ? order.totalAmount : undefined
     });
   } catch (error: any) {
     res.status(500).json({ 
@@ -64,7 +66,11 @@ export const getDeliveryByOrderId = async (req: Request, res: Response) => {
     res.status(200).json({
       status: true,
       message: "Delivery retrieved successfully",
-      data: delivery
+      data: delivery,
+      //show the amount of the order
+      orderAmount: typeof delivery.order === 'object' && 'totalAmount' in delivery.order ? delivery.order.totalAmount : undefined//save the database
+     
+
     });
   } catch (error: any) {
     res.status(500).json({ 
