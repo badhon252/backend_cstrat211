@@ -10,7 +10,7 @@ export interface IOrder extends mongoose.Document {
     price: number; // Price of the product at the time of order
   }[];
   totalAmount: number; // Total amount of the order
-  status: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
+  status: "pending" | "processing" | "paid" | "shipped" | "delivered" | "cancelled";
   createdAt: Date;
 }
 
@@ -47,7 +47,7 @@ const orderSchema = new mongoose.Schema<IOrder>(
     },
     status: {
       type: String,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
+      enum: ["pending", "processing", "paid", "shipped", "delivered", "cancelled"],
       default: "pending",
     },
   },
@@ -57,4 +57,3 @@ const orderSchema = new mongoose.Schema<IOrder>(
 const Order = mongoose.model<IOrder>("Order", orderSchema);
 
 export default Order;
-
