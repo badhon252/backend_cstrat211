@@ -156,7 +156,8 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
           paid: true,
           payment: {
             ...updatedPayment.toObject(),
-            userName: user?.name
+            userName: user?.name,
+            userPhone: user?.phone
           } 
         });
       }
@@ -173,6 +174,57 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({
       status: false,
       message: 'Payment verification failed: Internal server error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+
+//get all Payment successfully verified and completed in response show details
+export const getAllPayments = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const payments = await Payment.find({ paymentStatus: 'completed' }).lean();
+
+    // Extract all userIds and orderIds from payments
+    const userIds = payments.map(p => p.userId);
+    const orderIds = payments.map(p => p.orderId);
+
+    // Fetch users and orders in bulk (correct field: 'phone')
+    const users = await User.find({ _id: { $in: userIds } }).select('name phone').lean();
+    const orders = await Order.find({ _id: { $in: orderIds } }).select('status').lean();
+
+    // Convert to maps for quick lookup
+    const userMap = users.reduce((map, user) => {
+      map[user._id.toString()] = { 
+        name: user.name || '', 
+        phone: user.phone || null // Use 'phone' (not 'phonel')
+      };
+      return map;
+    }, {} as Record<string, { name: string; phone: string | null }>);
+
+    const orderMap = orders.reduce((map, order) => {
+      map[order._id.toString()] = { status: order.status || null };
+      return map;
+    }, {} as Record<string, { status: string | null }>);
+
+    // Enhance payments with additional fields
+    const enhancedPayments = payments.map(payment => ({
+      ...payment,
+      name: userMap[payment.userId.toString()]?.name || null,
+      phone: userMap[payment.userId.toString()]?.phone || null, // Now correctly mapped
+      status: orderMap[payment.orderId.toString()]?.status || null,
+    }));
+
+    res.status(200).json({
+      status: true,
+      message: 'All payments fetched successfully',
+      payments: enhancedPayments,
+    });
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).json({
+      status: false,
+      message: 'Failed to fetch payments',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
