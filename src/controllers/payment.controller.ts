@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { Request, Response } from 'express';
 import Payment from '../models/payment.model';
 import Order from '../models/order.model'; // Import your Order model
+import { User } from '../models/user.model';
 
 dotenv.config();
 
@@ -147,12 +148,18 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
       // Also update the order status to 'paid'
       await Order.findByIdAndUpdate(updatedPayment.orderId, { status: 'paid' });
       
-      res.status(200).json({ 
-        status: true, 
-        message: 'Payment successfully verified and completed',
-        paid: true,
-        payment: updatedPayment 
-      });
+      if (updatedPayment) {
+        const user = await User.findById(updatedPayment.userId);
+        res.status(200).json({
+          status: true, 
+          message: 'Payment successfully verified and completed',
+          paid: true,
+          payment: {
+            ...updatedPayment.toObject(),
+            userName: user?.name
+          } 
+        });
+      }
     } else {
       res.status(200).json({ 
         status: true, 
