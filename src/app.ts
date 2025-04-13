@@ -5,7 +5,7 @@ import productRouter from "./routes/product.route";
 import subCategoryRouter from "./routes/subCategory.routes";
 import contactRouter from "./routes/contactRoutes";
 import orderRouter from "./routes/order.routes";
-
+import paymentRouter from "./routes/payment.routes";
 
 const app = express();
 
@@ -21,6 +21,7 @@ app.use("/api/v1/subcategories", subCategoryRouter);
 app.use("/api/v1/products", productRouter);
 app.use("/api/v1/contact", contactRouter);
 app.use("/api/v1/orders", orderRouter);
+app.use("/api/v1/payments", paymentRouter);
 
 
 export default app;
