@@ -191,7 +191,7 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
 
     // Fetch users and orders in bulk (correct field: 'phone')
     const users = await User.find({ _id: { $in: userIds } }).select('name phone').lean();
-    const orders = await Order.find({ _id: { $in: orderIds } }).select('status').lean();
+    const orders = await Order.find({ _id: { $in: orderIds } }).select('status orderSlug').lean(); // Include 'orderSlug' here
 
     // Convert to maps for quick lookup
     const userMap = users.reduce((map, user) => {
@@ -203,17 +203,26 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
     }, {} as Record<string, { name: string; phone: string | null }>);
 
     const orderMap = orders.reduce((map, order) => {
-      map[order._id.toString()] = { status: order.status || null };
+      map[order._id.toString()] = { 
+        status: order.status || null,
+        orderSlug: order.orderSlug || null // Include 'orderSlug' in the map
+      };
       return map;
-    }, {} as Record<string, { status: string | null }>);
+    }, {} as Record<string, { status: string | null; orderSlug: string | null }>);
 
     // Enhance payments with additional fields
-    const enhancedPayments = payments.map(payment => ({
-      ...payment,
-      name: userMap[payment.userId.toString()]?.name || null,
-      phone: userMap[payment.userId.toString()]?.phone || null, // Now correctly mapped
-      status: orderMap[payment.orderId.toString()]?.status || null,
-    }));
+    const enhancedPayments = payments.map(payment => {
+      const orderId = payment.orderId.toString();
+      const userId = payment.userId.toString();
+
+      return {
+        ...payment,
+        name: userMap[userId]?.name || null,
+        phone: userMap[userId]?.phone || null, // Now correctly mapped
+        status: orderMap[orderId]?.status || null,
+        orderSlug: orderMap[orderId]?.orderSlug || null, // Include the 'orderSlug' from the database
+      };
+    });
 
     res.status(200).json({
       status: true,
