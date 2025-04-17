@@ -4,7 +4,9 @@ import {
   getAllOrders, 
   getOrderById,
   updateOrderStatus,
-  deleteOrder 
+  deleteOrder,
+  getOrderHistory,
+  
 } from "../controllers/order.controller";
 
 const router = express.Router();
@@ -23,5 +25,8 @@ router.put("/update/:id", updateOrderStatus as express.RequestHandler);
 
 // Delete order
 router.delete("/delete/:id", deleteOrder as express.RequestHandler);
+
+// Get order history for a user
+router.get("/history/:userId", getOrderHistory as express.RequestHandler);
 
 export default router;
