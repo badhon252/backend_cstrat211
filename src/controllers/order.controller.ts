@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Order from "../models/order.model";
 import Product from "../models/product.model";
 import { User } from "../models/user.model";
+import Delivery from "../models/delivery.model";
 
 interface OrderProduct {
   product: string;
@@ -290,5 +291,51 @@ export const deleteOrder = async (req: Request, res: Response) => {
     });
   } catch (error) {
     res.status(500).json({ status: false, message: "Error deleting order", error });
+  }
+};
+
+// Get order history for a specific user
+export const getOrderHistory = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    // Validate user ID
+    if (!userId) {
+      return res.status(400).json({
+        status: false,
+        message: "User ID is required",
+      });
+    }
+
+    // Fetch orders for the user
+    const orders = await Order.find({ user: userId })
+      .populate("products.product", "name price")
+      .sort({ createdAt: -1 });
+
+    // Fetch delivery status for each order
+    const orderHistory = await Promise.all(
+      orders.map(async (order) => {
+        const delivery = await Delivery.findOne({ order: order._id });
+        return {
+          orderNo: order.orderSlug,
+          total: `${order.totalAmount} (${order.products.length} Products)`,
+          status: delivery ? delivery.deliveryStatus : "Not Assigned",
+          date: order.createdAt,
+        };
+      })
+    );
+
+    res.status(200).json({
+      status: true,
+      message: "Order history retrieved successfully",
+      data: orderHistory,
+    });
+  } catch (error: any) {
+    console.error("Error retrieving order history:", error);
+    res.status(500).json({
+      status: false,
+      message: "Error retrieving order history",
+      error: error.message,
+    });
   }
 };
