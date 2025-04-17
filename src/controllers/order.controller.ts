@@ -321,6 +321,7 @@ export const getOrderHistory = async (req: Request, res: Response) => {
           total: `${order.totalAmount} (${order.products.length} Products)`,
           status: delivery ? delivery.deliveryStatus : "Not Assigned",
           date: order.createdAt,
+          orderId: order._id,
         };
       })
     );
