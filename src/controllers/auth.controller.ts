@@ -65,6 +65,46 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
+
+// Set new password
+export const setNewPassword = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ status: false, message: "User ID is required" });
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ status: false, message: "All fields are required" });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ status: false, message: "New password and confirm password do not match" });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(401).json({ status: false, message: "Invalid current password" });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedNewPassword;
+    await user.save();
+
+    res.status(200).json({ status: true, message: "Password updated successfully" });
+  } catch (error) {
+    res.status(500).json({ status: false, message: "Server error" });
+  }
+};
+
 export const forgotPassword = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -327,3 +367,4 @@ export const getUserById = async (req: Request, res: Response) => {
 export const logout = async (req: Request, res: Response) => {
   res.json({ status: true, message: "Logged out successfully" });
 };
+
