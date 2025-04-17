@@ -6,6 +6,7 @@ import Subcategory from "../models/subCategory.model";
 import { uploadToCloudinary } from "../utils/cloudinary";
 import deleteFromCloudinary from "../utils/deleteFromCloudinary";
 import fs from "fs/promises";
+import SubCategory from "../models/subCategory.model";
 
 const sendResponse = (
   res: Response,
@@ -338,6 +339,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
     // Extract query parameters
     const {
       category,
+      subcategory, // Add subcategory parameter
       status = "all",
       page = "1",
       limit = "20",
@@ -357,6 +359,17 @@ export const getAllProducts = async (req: Request, res: Response) => {
         return sendResponse(res, 404, false, "Category not found");
       }
       query.category = categoryDoc._id;
+    }
+
+    // Filter by subcategory (case-insensitive)
+    if (subcategory) {
+      const subcategoryDoc = await SubCategory.findOne({
+        subCategoryName: { $regex: new RegExp(subcategory as string, "i") },
+      });
+      if (!subcategoryDoc) {
+        return sendResponse(res, 404, false, "Subcategory not found");
+      }
+      query.subcategory = subcategoryDoc._id;
     }
 
     // Filter by stock status
