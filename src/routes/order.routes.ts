@@ -6,6 +6,7 @@ import {
   updateOrderStatus,
   deleteOrder,
   getOrderHistory,
+  cancelOrder
   
 } from "../controllers/order.controller";
 
@@ -28,5 +29,8 @@ router.delete("/delete/:id", deleteOrder as express.RequestHandler);
 
 // Get order history for a user
 router.get("/history/:userId", getOrderHistory as express.RequestHandler);
+
+// Cancel an order
+router.put("/order/:orderId/cancel", cancelOrder as express.RequestHandler);
 
 export default router;
