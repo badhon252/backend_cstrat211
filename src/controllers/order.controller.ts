@@ -339,3 +339,71 @@ export const getOrderHistory = async (req: Request, res: Response) => {
     });
   }
 };
+
+
+// Cancel an order// Cancel an order
+export const cancelOrder = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { userId } = req.body; // Assuming we get userId from authenticated user
+
+    // Find the order
+    const order = await Order.findOne({ 
+      _id: orderId, 
+      user: userId 
+    }).populate('delivery');
+
+    if (!order) {
+      return res.status(404).json({ 
+        status: false, 
+        message: "Order not found or doesn't belong to this user" 
+      });
+    }
+
+    // Check if order can be cancelled
+    if (order.status === 'cancelled') {
+      return res.status(400).json({ 
+        status: false, 
+        message: "Order is already cancelled" 
+      });
+    }
+
+    if (order.status === 'delivered') {
+      return res.status(400).json({ 
+        status: false, 
+        message: "Delivered orders cannot be cancelled" 
+      });
+    }
+
+    // Update order status
+    order.status = 'cancelled';
+    
+    // Update delivery status if exists
+    if (order.delivery) {
+      const delivery = await Delivery.findById(order.delivery);
+      if (delivery) {
+        delivery.deliveryStatus = 'cancelled';
+        await delivery.save();
+      }
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      status: true,
+      message: "Order cancelled successfully",
+      data: {
+        orderId: order._id,
+        status: order.status,
+        orderSlug: order.orderSlug
+      }
+    });
+  } catch (error: any) {
+    console.error("Error cancelling order:", error);
+    res.status(500).json({ 
+      status: false, 
+      message: "Error cancelling order",
+      error: error.message 
+    });
+  }
+};
