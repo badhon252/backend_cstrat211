@@ -116,32 +116,17 @@ export const createProduct = async (req: Request, res: Response) => {
       }
     }
 
-    // Process sizes and colors for customizable products
+    // CHANGED: Process sizes for all products (not just customizable ones)
     let sizes: string[] = [];
+    if (req.body.sizes) {
+      sizes = Array.isArray(req.body.sizes)
+        ? req.body.sizes
+        : req.body.sizes.split(",");
+    }
+
+    // Process colors only for customizable products
     let colors: any[] = [];
     if (isCustomizable) {
-      // Process sizes
-      if (req.body.sizes) {
-        sizes = Array.isArray(req.body.sizes)
-          ? req.body.sizes
-          : req.body.sizes.split(",");
-        if (sizes.length === 0) {
-          return sendResponse(
-            res,
-            400,
-            false,
-            "Sizes must not be empty for customizable products"
-          );
-        }
-      } else {
-        return sendResponse(
-          res,
-          400,
-          false,
-          "Sizes are required for customizable products"
-        );
-      }
-
       // Process colors
       if (req.body.colors) {
         try {
@@ -239,7 +224,7 @@ export const createProduct = async (req: Request, res: Response) => {
         images: isCustomizable ? [] : imageUrls,
         videos: isCustomizable ? [] : videoUrls,
       },
-      sizes: isCustomizable ? sizes : [],
+      sizes, // CHANGED: Now includes sizes for all products
       colors: isCustomizable ? colors : [],
       sku,
     });
@@ -261,6 +246,7 @@ export const createProduct = async (req: Request, res: Response) => {
       throw new Error("Failed to retrieve populated product");
     }
 
+    // CHANGED: Ensure consistent response format for sizes and colors
     const responseProduct = {
       id: populatedProduct._id,
       name: populatedProduct.name,
@@ -280,13 +266,15 @@ export const createProduct = async (req: Request, res: Response) => {
       createdAt: populatedProduct.createdAt,
       isCustomizable: populatedProduct.isCustomizable,
       media: populatedProduct.media,
-      sizes: populatedProduct.sizes,
-      colors: populatedProduct.colors.map((color) => ({
-        name: color.name,
-        hex: color.hex,
-        images: color.images,
-        _id: color._id,
-      })),
+      sizes: populatedProduct.sizes || [], // CHANGED: Ensure array even if empty
+      colors: populatedProduct.isCustomizable
+        ? populatedProduct.colors.map((color: any) => ({
+            name: color.name,
+            hex: color.hex,
+            images: color.images,
+            _id: color._id,
+          }))
+        : [], // CHANGED: Explicit empty array for non-customizable
       sku: populatedProduct.sku,
     };
 
@@ -431,7 +419,6 @@ export const getAllProducts = async (req: Request, res: Response) => {
       colors: product.colors,
       sku: product.sku,
     }));
-
     const response = {
       products: responseProducts,
       total,
