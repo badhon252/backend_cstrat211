@@ -399,7 +399,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
     if (order.delivery) {
       const delivery = await Delivery.findById(order.delivery);
       if (delivery) {
-        delivery.deliveryStatus = 'cancelled';
+        order.status = 'cancelled';
         await delivery.save();
       }
     }
@@ -451,7 +451,7 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
         // Exclude products from cancelled deliveries
         if (order.delivery) {
           const delivery = await Delivery.findById(order.delivery);
-          if (delivery && delivery.deliveryStatus === "cancelled") {
+          if (order && order.status === "cancelled") {
             continue; // Skip this product if delivery is cancelled
           }
         }

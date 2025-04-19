@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 import { IOrder } from "./order.model";
+import { IUser } from "./user.model";
 
 interface IDelivery extends mongoose.Document {
   order: mongoose.Types.ObjectId | IOrder;
+  user: mongoose.Types.ObjectId | IUser;
   fullName: string;
   phoneNumber: string;
   houseNoStreet: string;
@@ -11,7 +13,6 @@ interface IDelivery extends mongoose.Document {
   city: string;
   area: string;
   address: string;
-  deliveryStatus: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,11 @@ const deliverySchema = new mongoose.Schema<IDelivery>(
       ref: "Order",
       required: true,
       unique: true
+    },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
     },
     fullName: {
       type: String,
@@ -55,11 +61,6 @@ const deliverySchema = new mongoose.Schema<IDelivery>(
     address: {
       type: String,
       required: true
-    },
-    deliveryStatus: {
-      type: String,
-      enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
-      default: 'pending'
     }
   },
   { timestamps: true }
