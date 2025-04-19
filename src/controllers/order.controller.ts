@@ -408,3 +408,84 @@ export const cancelOrder = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getBestSellingProducts = async (req: Request, res: Response) => {
+  try {
+    // Fetch all orders excluding cancelled orders
+    const orders = await Order.find({
+      status: { $ne: "cancelled" }, // Exclude cancelled orders
+    })
+      .populate("products.product")
+      .lean();
+
+    // Create a map to store total quantity sold for each product
+    const productQuantityMap: { [key: string]: number } = {};
+
+    // Iterate through each order
+    for (const order of orders) {
+      for (const productItem of order.products) {
+        // Check if the product exists and has a valid _id
+        if (!productItem.product || !productItem.product._id) {
+          continue; // Skip this product if it's null or undefined
+        }
+
+        const productId = productItem.product._id.toString();
+        const quantity = productItem.quantity;
+
+        // Exclude products from cancelled deliveries
+        if (order.delivery) {
+          const delivery = await Delivery.findById(order.delivery);
+          if (delivery && delivery.deliveryStatus === "cancelled") {
+            continue; // Skip this product if delivery is cancelled
+          }
+        }
+
+        // Update the total quantity sold for the product
+        if (productQuantityMap[productId]) {
+          productQuantityMap[productId] += quantity;
+        } else {
+          productQuantityMap[productId] = quantity;
+        }
+      }
+    }
+
+    // Convert the map to an array of objects
+    const bestSellingProducts = Object.keys(productQuantityMap).map((productId) => ({
+      product: productId,
+      totalQuantitySold: productQuantityMap[productId],
+    }));
+
+    // Sort the products by totalQuantitySold in descending order
+    bestSellingProducts.sort((a, b) => b.totalQuantitySold - a.totalQuantitySold);
+
+    // Fetch product details for the best-selling products
+    const topProducts = await Promise.all(
+      bestSellingProducts.map(async (item) => {
+        const product = await Product.findById(item.product).select("name price media.images");
+        if (!product) {
+          return null;
+        }
+        return {
+          _id: product._id,
+          name: product.name,
+          price: product.price,
+          images: product.media.images, // Include the images in the response
+          totalQuantitySold: item.totalQuantitySold,
+        };
+      })    );
+
+    // Return the response
+    res.status(200).json({
+      status: true,
+      message: "Best selling products retrieved successfully",
+      data: topProducts,
+    });
+  } catch (error: any) {
+    console.error("Error fetching best selling products:", error);
+    res.status(500).json({
+      status: false,
+      message: "Error fetching best selling products",
+      error: error.message,
+    });
+  }
+};

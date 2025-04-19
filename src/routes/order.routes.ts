@@ -6,7 +6,8 @@ import {
   updateOrderStatus,
   deleteOrder,
   getOrderHistory,
-  cancelOrder
+  cancelOrder,
+  getBestSellingProducts
   
 } from "../controllers/order.controller";
 
@@ -32,5 +33,8 @@ router.get("/history/:userId", getOrderHistory as express.RequestHandler);
 
 // Cancel an order
 router.put("/order/:orderId/cancel", cancelOrder as express.RequestHandler);
+
+// Route to get best selling products
+router.get("/best-selling-products", getBestSellingProducts as express.RequestHandler);
 
 export default router;
