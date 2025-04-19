@@ -3,6 +3,9 @@ import Order from "../models/order.model";
 import Product from "../models/product.model";
 import { User } from "../models/user.model";
 import Delivery from "../models/delivery.model";
+import { uploadToCloudinary } from "../utils/cloudinary";
+import fs from "fs";
+import path from "path";
 
 interface OrderProduct {
   product: string;
@@ -13,6 +16,15 @@ interface CreateOrderRequest {
   user: string;
   products: OrderProduct[];
 }
+
+interface CustomizeProductRequest {
+  productId: string;
+  color: string | null;
+  size: string;
+  quantity: number;
+  userId: string; // Add this
+}
+
 
 // Create a new order
 export const createOrder = async (req: Request, res: Response) => {
@@ -396,10 +408,11 @@ export const cancelOrder = async (req: Request, res: Response) => {
     order.status = 'cancelled';
     
     // Update delivery status if exists
-    if (order.delivery) {
-      const delivery = await Delivery.findById(order.delivery);
+    const deliveryId = (order as any).delivery;
+    if (deliveryId) {
+      const delivery = await Delivery.findById(deliveryId);
       if (delivery) {
-        order.status = 'cancelled';
+        delivery.set('status', 'cancelled');
         await delivery.save();
       }
     }
@@ -423,6 +436,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
       error: error.message 
     });
   }
+
 };
 
 export const getBestSellingProducts = async (req: Request, res: Response) => {
@@ -432,6 +446,7 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
       status: { $ne: "cancelled" }, // Exclude cancelled orders
     })
       .populate("products.product")
+      .populate("delivery")
       .lean();
 
     // Create a map to store total quantity sold for each product
@@ -449,8 +464,7 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
         const quantity = productItem.quantity;
 
         // Exclude products from cancelled deliveries
-        if (order.delivery) {
-          const delivery = await Delivery.findById(order.delivery);
+ if ((order as any).delivery) {
           if (order && order.status === "cancelled") {
             continue; // Skip this product if delivery is cancelled
           }
@@ -501,6 +515,100 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
     res.status(500).json({
       status: false,
       message: "Error fetching best selling products",
+      error: error.message,
+    });
+  }
+};
+
+
+// Customize product and create order
+export const customizeProductAndCreateOrder = async (req: Request, res: Response) => {
+  try {
+
+    const { productId, color, size, quantity, userId } = req.body as CustomizeProductRequest;
+
+    // Validate inputs
+    if (!productId || !size || !quantity) {
+      return res.status(400).json({
+        status: false,
+        message: "Product ID, size, and quantity are required",
+      });
+    }
+
+    // Validate product exists
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({
+        status: false,
+        message: "Product not found",
+      });
+    }
+
+    // Check if files are uploaded
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    if (!files || !files["frontCustomizationPreview"] || !files["logoImage"]) {
+      return res.status(400).json({
+        status: false,
+        message: "Both frontCustomizationPreview and logoImage files are required",
+      });
+    }
+
+    // Extract files from form data
+    const frontCustomizationPreviewFile = files["frontCustomizationPreview"][0];
+    const logoImageFile = files["logoImage"][0];
+
+    // Upload frontCustomizationPreview to Cloudinary
+    const frontCustomizationPreviewUrl = await uploadToCloudinary(
+      frontCustomizationPreviewFile.path,
+      "customizations"
+    );
+
+    // Upload logoImage to Cloudinary
+    const logoImageUrl = await uploadToCloudinary(logoImageFile.path, "logos");
+
+    // Create order products array
+    const orderProducts = [
+      {
+        product: productId,
+        quantity,
+        price: product.price,
+        customization: {
+          color,
+          size,
+          frontCustomizationPreview: frontCustomizationPreviewUrl,
+          logoImage: logoImageUrl,
+          userId, // Add userId to customization
+
+        },
+      },
+    ];
+
+    // Calculate total amount
+    const totalAmount = product.price * quantity;
+
+    // Create and save order
+    const order = new Order({
+      user: userId, // Now using the provided userId
+      products: orderProducts,
+      totalAmount,
+    });
+
+    await order.save();
+
+    // Populate order details
+    const populatedOrder = await Order.findById(order._id)
+      .populate("products.product", "name price images");
+
+    res.status(201).json({
+      status: true,
+      message: "Order created successfully with customization",
+      data: populatedOrder,
+    });
+  } catch (error: any) {
+    console.error("Error customizing product and creating order:", error);
+    res.status(500).json({
+      status: false,
+      message: "Error customizing product and creating order",
       error: error.message,
     });
   }

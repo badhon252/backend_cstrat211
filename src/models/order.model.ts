@@ -1,20 +1,23 @@
 import mongoose from "mongoose";
 import { IUser } from "./user.model";
 import { IProduct } from "./product.model";
-import { IDelivery } from "./delivery.model";
 
 export interface IOrder extends mongoose.Document {
   user: mongoose.Types.ObjectId | IUser;
   products: {
-    toObject(): any;
     product: mongoose.Types.ObjectId | IProduct;
     quantity: number;
     price: number;
+    customization?: {
+      color: string | null;
+      size: string;
+      frontCustomizationPreview: string;
+      logoImage: string;
+    };
   }[];
   totalAmount: number;
   status: "pending" | "processing" | "paid" | "shipped" | "delivered" | "cancelled";
   orderSlug: string;
-  delivery?: mongoose.Types.ObjectId | IDelivery;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,6 +46,24 @@ const orderSchema = new mongoose.Schema<IOrder>(
           required: true,
           min: 0,
         },
+        customization: {
+          color: {
+            type: String,
+            default: null,
+          },
+          size: {
+            type: String,
+            required: true,
+          },
+          frontCustomizationPreview: {
+            type: String,
+            required: true,
+          },
+          logoImage: {
+            type: String,
+            required: true,
+          },
+        },
       },
     ],
     totalAmount: {
@@ -55,10 +76,6 @@ const orderSchema = new mongoose.Schema<IOrder>(
       enum: ["pending", "processing", "paid", "shipped", "delivered", "cancelled"],
       default: "pending",
     },
-    delivery: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Delivery"
-    },
     orderSlug: {
       type: String,
       unique: true,
@@ -69,22 +86,19 @@ const orderSchema = new mongoose.Schema<IOrder>(
   { timestamps: true }
 );
 
-// Improved pre-save hook for order slug generation
-orderSchema.pre('save', async function (next) {
+// Pre-save hook for order slug generation
+orderSchema.pre("save", async function (next) {
   if (this.isNew) {
     try {
-      // Find the highest order slug
-      const lastOrder = await Order.findOne({}, {}, { sort: { 'orderSlug': -1 } });
-      
+      const lastOrder = await Order.findOne({}, {}, { sort: { orderSlug: -1 } });
       let nextNumber = 1;
       if (lastOrder && lastOrder.orderSlug) {
-        const lastSlugNumber = parseInt(lastOrder.orderSlug.split('-')[1]);
+        const lastSlugNumber = parseInt(lastOrder.orderSlug.split("-")[1]);
         if (!isNaN(lastSlugNumber)) {
           nextNumber = lastSlugNumber + 1;
         }
       }
-      
-      this.orderSlug = `ORD-${nextNumber.toString().padStart(3, '0')}`;
+      this.orderSlug = `ORD-${nextNumber.toString().padStart(3, "0")}`;
     } catch (error: any) {
       return next(error);
     }
