@@ -7,9 +7,12 @@ import {
   deleteOrder,
   getOrderHistory,
   cancelOrder,
-  getBestSellingProducts
+  getBestSellingProducts,
+  customizeProductAndCreateOrder,
   
 } from "../controllers/order.controller";
+
+import upload from "../utils/multer";
 
 const router = express.Router();
 
@@ -36,5 +39,15 @@ router.put("/order/:orderId/cancel", cancelOrder as express.RequestHandler);
 
 // Route to get best selling products
 router.get("/best-selling-products", getBestSellingProducts as express.RequestHandler);
+
+// Customize product and create order
+router.post(
+  "/customize-and-order",
+  upload.fields([
+    { name: "frontCustomizationPreview", maxCount: 1 },
+    { name: "logoImage", maxCount: 1 },
+  ]),
+  customizeProductAndCreateOrder as express.RequestHandler
+);
 
 export default router;

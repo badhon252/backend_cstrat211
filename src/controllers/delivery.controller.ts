@@ -50,9 +50,8 @@ export const createDelivery = async (req: Request, res: Response) => {
     
     await delivery.save();
     
-    // Update order with delivery reference - FIXED TYPE ISSUE HERE
-    order.delivery = delivery._id as mongoose.Types.ObjectId;
-    await order.save();
+    // Update order with delivery reference
+    await Order.findByIdAndUpdate(orderId, { delivery: delivery._id });
     
     res.status(201).json({ 
       status: true, 
@@ -68,8 +67,8 @@ export const createDelivery = async (req: Request, res: Response) => {
       error: error.message 
     });
   }
-};
-export const getDeliveryByOrderId = async (req: Request, res: Response) => {
+
+};export const getDeliveryByOrderId = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     
