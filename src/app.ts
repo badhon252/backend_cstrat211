@@ -9,6 +9,7 @@ import paymentRouter from "./routes/payment.routes";
 import deliveryRouter from "./routes/delivery.routes";
 import analysisRouter from './routes/analysis.routes';
 import reviewRoutes from "./routes/reviewRoutes";
+import refundRoutes from './routes/refundRoutes'
 
 const app = express();
 
@@ -28,5 +29,6 @@ app.use("/api/v1/payments", paymentRouter);
 app.use("/api/v1/deliveries", deliveryRouter);
 app.use('/api/v1/analytics', analysisRouter);
 app.use("/api/v1/reviews", reviewRoutes);
+app.use("/api/v1/", refundRoutes);
 
 export default app;
