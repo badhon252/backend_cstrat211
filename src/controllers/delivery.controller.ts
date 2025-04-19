@@ -1,11 +1,12 @@
 import { Request, Response } from "express";
-import Delivery, { IDelivery } from "../models/delivery.model";
-import Order from "../models/order.model";
+import Delivery from "../models/delivery.model";
+import Order, { IOrder } from "../models/order.model";
+import { User } from "../models/user.model";
 import mongoose from 'mongoose';
 
 export const createDelivery = async (req: Request, res: Response) => {
   try {
-    const { orderId, fullName, phoneNumber, houseNoStreet, colonyLocality, region, city, area, address } = req.body;
+    const { orderId, userId, fullName, phoneNumber, houseNoStreet, colonyLocality, region, city, area, address } = req.body;
     
     // Check if order exists
     const order = await Order.findById(orderId);
@@ -16,9 +17,27 @@ export const createDelivery = async (req: Request, res: Response) => {
       });
     }
     
+    // Check if userId is provided
+    if (!userId) {
+      return res.status(400).json({ 
+        status: false, 
+        message: "User ID is required" 
+      });
+    }
+    
+    // Validate userId
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        status: false, 
+        message: "User not found" 
+      });
+    }
+    
     // Create delivery
     const delivery = new Delivery({
-      order: orderId,
+      order: new mongoose.Types.ObjectId(orderId),
+      user: new mongoose.Types.ObjectId(userId),
       fullName,
       phoneNumber,
       houseNoStreet,
@@ -31,7 +50,7 @@ export const createDelivery = async (req: Request, res: Response) => {
     
     await delivery.save();
     
-    // Update order with delivery reference
+    // Update order with delivery reference - FIXED TYPE ISSUE HERE
     order.delivery = delivery._id as mongoose.Types.ObjectId;
     await order.save();
     
@@ -39,8 +58,8 @@ export const createDelivery = async (req: Request, res: Response) => {
       status: true, 
       message: "Delivery created successfully",
       data: delivery,
-      //show the amount of the order
-      orderAmount: typeof order === 'object' && 'totalAmount' in order ? order.totalAmount : undefined
+      orderStatus: order.status,
+      orderAmount: order.totalAmount
     });
   } catch (error: any) {
     res.status(500).json({ 
@@ -50,11 +69,13 @@ export const createDelivery = async (req: Request, res: Response) => {
     });
   }
 };
-
 export const getDeliveryByOrderId = async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const delivery = await Delivery.findOne({ order: orderId }).populate('order');
+    
+    const delivery = await Delivery.findOne({ order: orderId })
+      .populate('order')
+      // .populate('user');
     
     if (!delivery) {
       return res.status(404).json({ 
@@ -62,52 +83,23 @@ export const getDeliveryByOrderId = async (req: Request, res: Response) => {
         message: "Delivery not found" 
       });
     }
+    
+    // Proper type checking
+    const populatedOrder = delivery.order as IOrder;
+    const orderAmount = 'totalAmount' in populatedOrder ? populatedOrder.totalAmount : undefined;
+    const orderStatus = 'status' in populatedOrder ? populatedOrder.status : undefined;
     
     res.status(200).json({
       status: true,
       message: "Delivery retrieved successfully",
       data: delivery,
-      //show the amount of the order
-      orderAmount: typeof delivery.order === 'object' && 'totalAmount' in delivery.order ? delivery.order.totalAmount : undefined//save the database
-     
-
+      orderStatus,
+      orderAmount
     });
   } catch (error: any) {
     res.status(500).json({ 
       status: false, 
       message: "Error fetching delivery", 
-      error: error.message 
-    });
-  }
-};
-
-export const updateDeliveryStatus = async (req: Request, res: Response) => {
-  try {
-    const { deliveryId } = req.params;
-    const { deliveryStatus } = req.body;
-    
-    const delivery = await Delivery.findByIdAndUpdate(
-      deliveryId,
-      { deliveryStatus },
-      { new: true }
-    );
-    
-    if (!delivery) {
-      return res.status(404).json({ 
-        status: false, 
-        message: "Delivery not found" 
-      });
-    }
-    
-    res.status(200).json({
-      status: true,
-      message: "Delivery status updated successfully",
-      data: delivery
-    });
-  } catch (error: any) {
-    res.status(500).json({ 
-      status: false, 
-      message: "Error updating delivery status", 
       error: error.message 
     });
   }
