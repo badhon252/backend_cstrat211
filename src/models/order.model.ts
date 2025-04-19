@@ -6,6 +6,7 @@ import { IDelivery } from "./delivery.model";
 export interface IOrder extends mongoose.Document {
   user: mongoose.Types.ObjectId | IUser;
   products: {
+    toObject(): any;
     product: mongoose.Types.ObjectId | IProduct;
     quantity: number;
     price: number;

@@ -226,22 +226,38 @@ export const getOrderById = async (req: Request, res: Response) => {
     const { id } = req.params;
     const order = await Order.findById(id)
       .populate("user", "name")
-      .populate("products.product", "name price");
+      .populate({
+        path: "products.product",
+        select: "name price media.images",
+      })
+      .lean(); // Convert to plain JavaScript object
     
     if (!order) {
       return res.status(404).json({ status: false, message: "Order not found" });
     }
     
+    // Transform the products array to flatten the structure
+    const transformedOrder = {
+      ...order,
+      products: order.products.map(item => ({
+        ...item,
+        product: {
+          _id: item.product._id,
+          name: (item.product as any).name,
+          price: (item.product as any).price,
+          images: (item.product as any).media?.images || []
+        }
+      }))    };
+    
     res.status(200).json({ 
       status: true, 
       message: "Order fetched successfully",
-      order 
+      order: transformedOrder
     });
   } catch (error) {
     res.status(500).json({ status: false, message: "Error fetching order", error });
   }
 };
-
 // Update order status
 export const updateOrderStatus = async (req: Request, res: Response) => {
   try {
