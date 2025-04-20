@@ -446,7 +446,7 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
       status: { $ne: "cancelled" }, // Exclude cancelled orders
     })
       .populate("products.product")
-      .populate("delivery")
+      // .populate("delivery")
       .lean();
 
     // Create a map to store total quantity sold for each product
