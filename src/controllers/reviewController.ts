@@ -63,9 +63,17 @@ export const getProductReviews = async (req: Request, res: Response) => {
       .populate("user", "name avatar")
       .sort({ createdAt: -1 });
 
-    res.json(reviews);
+    res.status(200).json({
+      status: true,
+      message: "Reviews fetched successfully",
+      data: reviews,
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    res.status(500).json({
+      status: false,
+      message: "Server error",
+      error,
+    });
   }
 };
 
