@@ -10,6 +10,13 @@ interface RegionData {
   percentage?: string; // Change to string to include "%"
 }
 
+
+interface MonthlyData {
+  name: string;
+  revenue: number;
+  sales: number; // This will be the percentage
+}
+
 export const getAnalytics = async (req: Request, res: Response) => {
   try {
     // Total income (from payments)
@@ -163,6 +170,77 @@ export const getAnalytics = async (req: Request, res: Response) => {
     res.status(500).json({ 
       status: false,
       message: "Error fetching analytics",
+      error: error.message
+    });
+  }
+};
+
+
+
+
+export const dashboardAnalysis = async (req: Request, res: Response) => {
+  try {
+    // Get current year
+    const currentYear = new Date().getFullYear();
+
+    // Aggregate payments by month for the current year
+    const monthlyPayments = await Payment.aggregate([
+      {
+        $match: {
+          paymentStatus: 'completed', // Only count completed payments
+          createdAt: {
+            $gte: new Date(`${currentYear}-01-01`),
+            $lt: new Date(`${currentYear + 1}-01-01`)
+          }
+        }
+      },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          totalAmount: { $sum: "$amount" }
+        }
+      },
+      {
+        $sort: { "_id": 1 } // Sort by month (1-12)
+      }
+    ]);
+
+    // Calculate total revenue for the year (for percentage calculation)
+    const totalYearlyRevenue = monthlyPayments.reduce((sum, month) => sum + month.totalAmount, 0);
+
+    // Create month names array
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    // Format the data to match your structure
+    const monthlyData: MonthlyData[] = monthNames.map((month, index) => {
+      const monthNumber = index + 1;
+      const monthPayment = monthlyPayments.find(m => m._id === monthNumber);
+      const revenue = monthPayment?.totalAmount || 0;
+      
+      // Calculate sales percentage (rounded to nearest integer)
+      const sales = totalYearlyRevenue > 0 
+        ? Math.round((revenue / totalYearlyRevenue) * 100)
+        : 0;
+
+      return {
+        name: month,
+        revenue,
+        sales
+      };
+    });
+
+    // If you want to include all months even if they have no data
+    // (the above implementation already does this)
+
+    res.status(200).json({
+      status: true,
+      message: "Dashboard analysis fetched successfully",
+      data: monthlyData
+    });
+  } catch (error: any) {
+    res.status(500).json({ 
+      status: false,
+      message: "Error fetching dashboard analysis",
       error: error.message
     });
   }
