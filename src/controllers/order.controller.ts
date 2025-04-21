@@ -524,7 +524,6 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
 // Customize product and create order
 export const customizeProductAndCreateOrder = async (req: Request, res: Response) => {
   try {
-
     const { productId, color, size, quantity, userId } = req.body as CustomizeProductRequest;
 
     // Validate inputs
@@ -544,27 +543,26 @@ export const customizeProductAndCreateOrder = async (req: Request, res: Response
       });
     }
 
-    // Check if files are uploaded
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    if (!files || !files["frontCustomizationPreview"] || !files["logoImage"]) {
-      return res.status(400).json({
-        status: false,
-        message: "Both frontCustomizationPreview and logoImage files are required",
-      });
+
+    let frontCustomizationPreviewUrl: string | undefined;
+    let logoImageUrl: string | undefined;
+
+    // Upload frontCustomizationPreview to Cloudinary if present
+    if (files?.["frontCustomizationPreview"]?.[0]) {
+      frontCustomizationPreviewUrl = await uploadToCloudinary(
+        files["frontCustomizationPreview"][0].path,
+        "customizations"
+      );
     }
 
-    // Extract files from form data
-    const frontCustomizationPreviewFile = files["frontCustomizationPreview"][0];
-    const logoImageFile = files["logoImage"][0];
-
-    // Upload frontCustomizationPreview to Cloudinary
-    const frontCustomizationPreviewUrl = await uploadToCloudinary(
-      frontCustomizationPreviewFile.path,
-      "customizations"
-    );
-
-    // Upload logoImage to Cloudinary
-    const logoImageUrl = await uploadToCloudinary(logoImageFile.path, "logos");
+    // Upload logoImage to Cloudinary if present
+    if (files?.["logoImage"]?.[0]) {
+      logoImageUrl = await uploadToCloudinary(
+        files["logoImage"][0].path,
+        "logos"
+      );
+    }
 
     // Create order products array
     const orderProducts = [
@@ -577,8 +575,7 @@ export const customizeProductAndCreateOrder = async (req: Request, res: Response
           size,
           frontCustomizationPreview: frontCustomizationPreviewUrl,
           logoImage: logoImageUrl,
-          userId, // Add userId to customization
-
+          userId,
         },
       },
     ];
@@ -588,7 +585,7 @@ export const customizeProductAndCreateOrder = async (req: Request, res: Response
 
     // Create and save order
     const order = new Order({
-      user: userId, // Now using the provided userId
+      user: userId,
       products: orderProducts,
       totalAmount,
     });
