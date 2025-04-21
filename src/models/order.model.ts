@@ -53,15 +53,15 @@ const orderSchema = new mongoose.Schema<IOrder>(
           },
           size: {
             type: String,
-            required: true,
+            
           },
           frontCustomizationPreview: {
             type: String,
-            required: true,
+            
           },
           logoImage: {
             type: String,
-            required: true,
+            
           },
         },
       },
