@@ -1,18 +1,23 @@
 import express from 'express';
 import {
   createContent,
+  updateContent,
+  getContentByType,
   getAllContents,
-
 } from '../controllers/content.controller';
 
 const router = express.Router();
 
-// Create a new content
-router.post('/post', createContent as express.RequestHandler);
+// Create new content (About Us, Terms, Privacy)
+router.post('/create', createContent as express.RequestHandler);
 
-// Get all content
-router.get('/get', getAllContents as express.RequestHandler);
+// Update existing content by type
+router.put('/update', updateContent as express.RequestHandler);
 
+// Get content by type (about, terms, privacy)
+router.get('/:type', getContentByType as express.RequestHandler);
 
+// Get all contents
+router.get('/', getAllContents as express.RequestHandler);
 
 export default router;
