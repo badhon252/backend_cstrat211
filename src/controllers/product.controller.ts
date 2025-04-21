@@ -265,8 +265,17 @@ export const createProduct = async (req: Request, res: Response) => {
       inStock: populatedProduct.inStock,
       createdAt: populatedProduct.createdAt,
       isCustomizable: populatedProduct.isCustomizable,
-      media: populatedProduct.media,
-      sizes: populatedProduct.sizes || [], // CHANGED: Ensure array even if empty
+      media: {
+        images: populatedProduct.isCustomizable
+          ? Array.from(
+              new Set(
+                populatedProduct.colors.flatMap((color: any) => color.images)
+              )
+            )
+          : populatedProduct.media.images,
+        videos: populatedProduct.media.videos,
+      },
+      sizes: populatedProduct.sizes || [],
       colors: populatedProduct.isCustomizable
         ? populatedProduct.colors.map((color: any) => ({
             name: color.name,
@@ -274,7 +283,7 @@ export const createProduct = async (req: Request, res: Response) => {
             images: color.images,
             _id: color._id,
           }))
-        : [], // CHANGED: Explicit empty array for non-customizable
+        : [],
       sku: populatedProduct.sku,
     };
 
@@ -402,6 +411,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
       name: product.name,
       description: product.description,
       price: product.price,
+      discountParcentage: product.discountParcentage,
       category: (product.category as any)?.categoryName || "",
       subcategory: (product.subcategory as any)?.subCategoryName || "",
       type: product.type,
@@ -414,7 +424,12 @@ export const getAllProducts = async (req: Request, res: Response) => {
       inStock: product.inStock,
       createdAt: product.createdAt,
       isCustomizable: product.isCustomizable,
-      media: product.media,
+      media: {
+        images: product.isCustomizable
+          ? Array.from(new Set(product.colors.flatMap((color: any) => color.images)))
+          : product.media.images,
+        videos: product.media.videos,
+      },
       sizes: product.sizes,
       colors: product.colors,
       sku: product.sku,
@@ -731,7 +746,14 @@ export const updateProduct = async (req: Request, res: Response) => {
       inStock: updatedProduct.inStock,
       createdAt: updatedProduct.createdAt,
       isCustomizable: updatedProduct.isCustomizable,
-      media: updatedProduct.media,
+      media: {
+        images: updatedProduct.isCustomizable
+          ? Array.from(
+              new Set(updatedProduct.colors.flatMap((color: any) => color.images))
+            )
+          : updatedProduct.media.images,
+        videos: updatedProduct.media.videos,
+      },
       sizes: updatedProduct.sizes,
       colors: updatedProduct.colors.map((color) => ({
         name: color.name,
