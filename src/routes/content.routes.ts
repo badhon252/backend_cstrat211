@@ -11,7 +11,7 @@ const router = express.Router();
 router.post('/post', createContent as express.RequestHandler);
 
 // Get all content
-router.get('/', getAllContents as express.RequestHandler);
+router.get('/get', getAllContents as express.RequestHandler);
 
 
 
