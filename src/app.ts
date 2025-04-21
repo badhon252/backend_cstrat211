@@ -10,6 +10,7 @@ import deliveryRouter from "./routes/delivery.routes";
 import analysisRouter from './routes/analysis.routes';
 import reviewRoutes from "./routes/reviewRoutes";
 import refundRoutes from './routes/refundRoutes'
+import contentRoutes from './routes/content.routes';
 
 const app = express();
 
@@ -30,5 +31,6 @@ app.use("/api/v1/deliveries", deliveryRouter);
 app.use('/api/v1/analytics', analysisRouter);
 app.use("/api/v1/reviews", reviewRoutes);
 app.use("/api/v1/", refundRoutes);
+app.use("/api/v1/content", contentRoutes);
 
 export default app;
