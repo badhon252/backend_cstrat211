@@ -15,15 +15,24 @@ const storage = multer_1.default.diskStorage({
     },
 });
 const fileFilter = (req, file, cb) => {
-    const filetypes = /jpeg|jpg|png|gif|mp4|mov|avi|webm/;
-    const extname = filetypes.test(path_1.default.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype);
-    if (extname && mimetype) {
+    const filetypes = /mp4|mov|avi|webm/;
+    const extname = path_1.default.extname(file.originalname).toLowerCase();
+    const mimetype = file.mimetype;
+    // Check if it's a video file
+    if (filetypes.test(extname)) {
+        if (filetypes.test(mimetype)) {
+            return cb(null, true);
+        }
+        else {
+            return cb(new Error("Invalid video file type!"));
+        }
+    }
+    // If it's not a video, check if it's an image (any image type)
+    if (mimetype.startsWith('image/')) {
         return cb(null, true);
     }
-    else {
-        cb(new Error("Only image (jpeg, jpg, png, gif) and video (mp4, mov, avi, webm) files are allowed!"));
-    }
+    // If neither image nor allowed video
+    cb(new Error("Only image files and video files (mp4, mov, avi, webm) are allowed!"));
 };
 const upload = (0, multer_1.default)({
     storage: storage,
