@@ -1,8 +1,8 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose from "mongoose";
 
-interface PaymentDocument extends Document {
-  userId: string;
-  orderId: string;
+export interface IPayment extends mongoose.Document {
+  userId: mongoose.Types.ObjectId;
+  orderIds: mongoose.Types.ObjectId[];
   amount: number;
   stripeSessionId: string;
   paymentStatus: 'pending' | 'completed' | 'failed';
@@ -10,19 +10,22 @@ interface PaymentDocument extends Document {
   updatedAt: Date;
 }
 
-const paymentSchema = new Schema<PaymentDocument>(
+const paymentSchema = new mongoose.Schema<IPayment>(
   {
     userId: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
     },
-    orderId: {
-      type: String,
+    orderIds: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
       required: true,
-    },
+    }],
     amount: {
       type: Number,
       required: true,
+      min: 0,
     },
     stripeSessionId: {
       type: String,
@@ -38,6 +41,6 @@ const paymentSchema = new Schema<PaymentDocument>(
   { timestamps: true }
 );
 
-const Payment = mongoose.model<PaymentDocument>('Payment', paymentSchema);
+const Payment = mongoose.model<IPayment>("Payment", paymentSchema);
 
 export default Payment;
