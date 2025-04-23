@@ -12,19 +12,19 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 });
 
 export const createPaymentSession = async (req: Request, res: Response): Promise<void> => {
-  const { userId, orderIds } = req.body;
+  const { userId, orderId } = req.body;
 
-  if (!userId || !orderIds || !Array.isArray(orderIds)) {
+  if (!userId || !orderId || !Array.isArray(orderId)) {
     res.status(400).json({ 
       status: false, 
-      message: 'userId and orderIds (array) are required!' 
+      message: 'userId and orderId (array) are required!' 
     });
     return;
   }
 
   try {
     const orders = await Order.find({ 
-      _id: { $in: orderIds },
+      _id: { $in: orderId },
       user: userId,
       status: { $in: ['pending', 'processing'] }
     });
@@ -42,7 +42,7 @@ export const createPaymentSession = async (req: Request, res: Response): Promise
       res.status(400).json({ 
         status: false, 
         message: 'Some orders are already paid',
-        paidOrderIds: paidOrders.map(order => order._id)
+        paidOrderId: paidOrders.map(order => order._id)
       });
       return;
     }
@@ -77,18 +77,18 @@ export const createPaymentSession = async (req: Request, res: Response): Promise
       cancel_url: cancelUrl,
       metadata: {
         userId,
-        orderIds: JSON.stringify(orderIds),
+        orderId: JSON.stringify(orderId),
       },
     });
 
     await Order.updateMany(
-      { _id: { $in: orderIds } },
+      { _id: { $in: orderId } },
       { $set: { paymentSessionId: session.id } }
     );
 
     const newPayment = new Payment({
       userId,
-      orderIds,
+      orderId,
       amount: totalAmount,
       stripeSessionId: session.id,
       paymentStatus: 'pending',
@@ -144,11 +144,11 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
       }
       
       // Parse order IDs from metadata
-      const orderIds = session.metadata?.orderIds ? JSON.parse(session.metadata.orderIds) : [];
+      const orderId = session.metadata?.orderId ? JSON.parse(session.metadata.orderId) : [];
       
       // Update all orders status to 'paid'
       await Order.updateMany(
-        { _id: { $in: orderIds } },
+        { _id: { $in: orderId } },
         { $set: { status: 'paid' } }
       );
       
@@ -162,7 +162,7 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
             ...updatedPayment.toObject(),
             userName: user?.name,
             userPhone: user?.phone,
-            orderCount: orderIds.length
+            orderCount: orderId.length
           } 
         });
       }
@@ -189,11 +189,11 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
 
     // Extract all userIds and flatten all orderIds from payments
     const userIds = payments.map(p => p.userId);
-    const allOrderIds = payments.flatMap(p => p.orderIds || []);
+    const allOrderId = payments.flatMap(p => p.orderId || []);
 
     // Fetch users and orders in bulk
     const users = await User.find({ _id: { $in: userIds } }).select('name phone').lean();
-    const orders = await Order.find({ _id: { $in: allOrderIds } }).select('status orderSlug').lean();
+    const orders = await Order.find({ _id: { $in: allOrderId } }).select('status orderSlug').lean();
 
     // Convert to maps for quick lookup
     const userMap = users.reduce((map, user) => {
@@ -215,7 +215,7 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
     // Enhance payments with additional fields
     const enhancedPayments = payments.map(payment => {
       const userId = payment.userId.toString();
-      const orderDetails = (payment.orderIds || []).map(orderId => ({
+      const orderDetails = (payment.orderId || []).map(orderId => ({
         orderId: orderId.toString(),
         status: orderMap[orderId.toString()]?.status || null,
         orderSlug: orderMap[orderId.toString()]?.orderSlug || null,
@@ -226,7 +226,7 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
         name: userMap[userId]?.name || null,
         phone: userMap[userId]?.phone || null,
         orderDetails,
-        orderCount: payment.orderIds?.length || 0,
+        orderCount: payment.orderId?.length || 0,
       };
     });
 
