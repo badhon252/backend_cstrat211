@@ -446,7 +446,6 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
       status: { $ne: "cancelled" }, // Exclude cancelled orders
     })
       .populate("products.product")
-      // .populate("delivery")
       .lean();
 
     // Create a map to store total quantity sold for each product
@@ -464,7 +463,7 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
         const quantity = productItem.quantity;
 
         // Exclude products from cancelled deliveries
- if ((order as any).delivery) {
+        if ((order as any).delivery) {
           if (order && order.status === "cancelled") {
             continue; // Skip this product if delivery is cancelled
           }
@@ -491,24 +490,41 @@ export const getBestSellingProducts = async (req: Request, res: Response) => {
     // Fetch product details for the best-selling products
     const topProducts = await Promise.all(
       bestSellingProducts.map(async (item) => {
-        const product = await Product.findById(item.product).select("name price media.images");
+        const product = await Product.findById(item.product).select("name price media.images colors");
         if (!product) {
           return null;
         }
+        
+        // Start with the main product images
+        let allImages = [...(product.media?.images || [])];
+        
+        // Add color images if they exist
+        if (product.colors && product.colors.length > 0) {
+          for (const color of product.colors) {
+            if (color.images && color.images.length > 0) {
+              allImages = [...allImages, ...color.images];
+            }
+          }
+        }
+
         return {
           _id: product._id,
           name: product.name,
           price: product.price,
-          images: product.media.images, // Include the images in the response
+          images: allImages, // Combined array of all images
           totalQuantitySold: item.totalQuantitySold,
         };
-      })    );
+      })
+    );
+
+    // Filter out any null values (products that might have been deleted)
+    const filteredProducts = topProducts.filter(product => product !== null);
 
     // Return the response
     res.status(200).json({
       status: true,
       message: "Best selling products retrieved successfully",
-      data: topProducts,
+      data: filteredProducts,
     });
   } catch (error: any) {
     console.error("Error fetching best selling products:", error);
