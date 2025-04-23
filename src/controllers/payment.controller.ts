@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import dotenv from 'dotenv';
 import { Request, Response } from 'express';
 import Payment from '../models/payment.model';
-import Order from '../models/order.model'; // Import your Order model
+import Order from '../models/order.model';
 import { User } from '../models/user.model';
 
 dotenv.config();
@@ -12,50 +12,44 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 });
 
 export const createPaymentSession = async (req: Request, res: Response): Promise<void> => {
-  const { userId, orderId } = req.body;
+  const { userId, orderIds } = req.body;
 
-  // Validate required fields
-  if (!userId || !orderId) {
+  if (!userId || !orderIds || !Array.isArray(orderIds)) {
     res.status(400).json({ 
       status: false, 
-      message: 'userId and orderId are required!' 
+      message: 'userId and orderIds (array) are required!' 
     });
     return;
   }
 
   try {
-    // Find the order in database
-    const order = await Order.findById(orderId);
-    
-    if (!order) {
+    const orders = await Order.find({ 
+      _id: { $in: orderIds },
+      user: userId,
+      status: { $in: ['pending', 'processing'] }
+    });
+
+    if (!orders.length) {
       res.status(404).json({ 
         status: false, 
-        message: 'Order not found' 
+        message: 'No valid orders found for payment' 
       });
       return;
     }
 
-    // Verify the order belongs to the user
-    if (order.user.toString() !== userId) {
-      res.status(403).json({ 
-        status: false, 
-        message: 'This order does not belong to the specified user' 
-      });
-      return;
-    }
-
-    // Check if order is already paid
-    if (order.status === 'paid') {
+    const paidOrders = orders.filter(order => order.status === 'paid');
+    if (paidOrders.length > 0) {
       res.status(400).json({ 
         status: false, 
-        message: 'Order is already paid' 
+        message: 'Some orders are already paid',
+        paidOrderIds: paidOrders.map(order => order._id)
       });
       return;
     }
 
-    const totalAmountInCents = Math.round(order.totalAmount * 100);
+    const totalAmount = orders.reduce((sum, order) => sum + order.totalAmount, 0);
+    const totalAmountInCents = Math.round(totalAmount * 100);
 
-    // Validate FRONTEND_URL is set
     if (!process.env.FRONTEND_URL) {
       throw new Error('FRONTEND_URL environment variable is not set');
     }
@@ -63,35 +57,39 @@ export const createPaymentSession = async (req: Request, res: Response): Promise
     const successUrl = `${process.env.FRONTEND_URL}/order/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${process.env.FRONTEND_URL}/order/cancel`;
 
+    const lineItems = orders.map(order => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: `Order #${order.orderSlug}`,
+          description: `Payment for order ${order.orderSlug}`,
+        },
+        unit_amount: Math.round(order.totalAmount * 100),
+      },
+      quantity: 1,
+    }));
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Order #${orderId}`,
-              description: `Payment for order ${orderId}`,
-            },
-            unit_amount: totalAmountInCents,
-          },
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {
         userId,
-        orderId,
+        orderIds: JSON.stringify(orderIds),
       },
     });
 
-    // Save the payment session in the database
+    await Order.updateMany(
+      { _id: { $in: orderIds } },
+      { $set: { paymentSessionId: session.id } }
+    );
+
     const newPayment = new Payment({
       userId,
-      orderId,
-      amount: order.totalAmount,
+      orderIds,
+      amount: totalAmount,
       stripeSessionId: session.id,
       paymentStatus: 'pending',
     });
@@ -100,10 +98,11 @@ export const createPaymentSession = async (req: Request, res: Response): Promise
     
     res.status(200).json({ 
       status: true, 
-      message: 'Payment session created',
+      message: 'Payment session created for multiple orders',
       url: session.url,
       sessionId: session.id,
-      amount: order.totalAmount // Optional: include amount in response
+      amount: totalAmount,
+      orderCount: orders.length
     });
   } catch (error) {
     console.error('Payment session creation error:', error);
@@ -114,7 +113,6 @@ export const createPaymentSession = async (req: Request, res: Response): Promise
     });
   }
 };
-
 export const verifyPayment = async (req: Request, res: Response): Promise<void> => {
   const { sessionId } = req.params;
 
@@ -145,19 +143,26 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
         return;
       }
       
-      // Also update the order status to 'paid'
-      await Order.findByIdAndUpdate(updatedPayment.orderId, { status: 'paid' });
+      // Parse order IDs from metadata
+      const orderIds = session.metadata?.orderIds ? JSON.parse(session.metadata.orderIds) : [];
+      
+      // Update all orders status to 'paid'
+      await Order.updateMany(
+        { _id: { $in: orderIds } },
+        { $set: { status: 'paid' } }
+      );
       
       if (updatedPayment) {
         const user = await User.findById(updatedPayment.userId);
         res.status(200).json({
           status: true, 
-          message: 'Payment successfully verified and completed',
+          message: 'Payment successfully verified and completed for all orders',
           paid: true,
           payment: {
             ...updatedPayment.toObject(),
             userName: user?.name,
-            userPhone: user?.phone
+            userPhone: user?.phone,
+            orderCount: orderIds.length
           } 
         });
       }
@@ -178,26 +183,23 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
     });
   }
 };
-
-
-//get all Payment successfully verified and completed in response show details
 export const getAllPayments = async (req: Request, res: Response): Promise<void> => {
   try {
-    const payments = await Payment.find({ paymentStatus: 'completed' }).lean();
+    const payments = await Payment.find().lean().sort({ createdAt: -1 });
 
-    // Extract all userIds and orderIds from payments
+    // Extract all userIds and flatten all orderIds from payments
     const userIds = payments.map(p => p.userId);
-    const orderIds = payments.map(p => p.orderId);
+    const allOrderIds = payments.flatMap(p => p.orderIds || []);
 
-    // Fetch users and orders in bulk (correct field: 'phone')
+    // Fetch users and orders in bulk
     const users = await User.find({ _id: { $in: userIds } }).select('name phone').lean();
-    const orders = await Order.find({ _id: { $in: orderIds } }).select('status orderSlug').lean(); // Include 'orderSlug' here
+    const orders = await Order.find({ _id: { $in: allOrderIds } }).select('status orderSlug').lean();
 
     // Convert to maps for quick lookup
     const userMap = users.reduce((map, user) => {
       map[user._id.toString()] = { 
         name: user.name || '', 
-        phone: user.phone || null // Use 'phone' (not 'phonel')
+        phone: user.phone || null
       };
       return map;
     }, {} as Record<string, { name: string; phone: string | null }>);
@@ -205,22 +207,26 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
     const orderMap = orders.reduce((map, order) => {
       map[order._id.toString()] = { 
         status: order.status || null,
-        orderSlug: order.orderSlug || null // Include 'orderSlug' in the map
+        orderSlug: order.orderSlug || null
       };
       return map;
     }, {} as Record<string, { status: string | null; orderSlug: string | null }>);
 
     // Enhance payments with additional fields
     const enhancedPayments = payments.map(payment => {
-      const orderId = payment.orderId.toString();
       const userId = payment.userId.toString();
+      const orderDetails = (payment.orderIds || []).map(orderId => ({
+        orderId: orderId.toString(),
+        status: orderMap[orderId.toString()]?.status || null,
+        orderSlug: orderMap[orderId.toString()]?.orderSlug || null,
+      }));
 
       return {
         ...payment,
         name: userMap[userId]?.name || null,
-        phone: userMap[userId]?.phone || null, // Now correctly mapped
-        status: orderMap[orderId]?.status || null,
-        orderSlug: orderMap[orderId]?.orderSlug || null, // Include the 'orderSlug' from the database
+        phone: userMap[userId]?.phone || null,
+        orderDetails,
+        orderCount: payment.orderIds?.length || 0,
       };
     });
 
