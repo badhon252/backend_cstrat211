@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 export interface IPayment extends mongoose.Document {
   userId: mongoose.Types.ObjectId;
-  orderIds: mongoose.Types.ObjectId[];
+  orderId: mongoose.Types.ObjectId[];
   amount: number;
   stripeSessionId: string;
   paymentStatus: 'pending' | 'completed' | 'failed';
@@ -17,7 +17,7 @@ const paymentSchema = new mongoose.Schema<IPayment>(
       ref: "User",
       required: true,
     },
-    orderIds: [{
+    orderId: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: "Order",
       required: true,
