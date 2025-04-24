@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.config = exports.cloudinaryApiSecret = exports.cloudinaryApiKey = exports.cloudinaryCloudName = exports.emailPass = exports.emailUser = exports.jwtSecret = exports.mongodbUrl = exports.port = void 0;
+const dotenv_1 = require("dotenv");
+Object.defineProperty(exports, "config", { enumerable: true, get: function () { return dotenv_1.config; } });
+(0, dotenv_1.config)({ path: ".env" });
+exports.port = parseInt(process.env.PORT || "8001", 10);
+exports.mongodbUrl = process.env.MONGODB_URI || "";
+exports.jwtSecret = process.env.JWT_SECRET || "defaultsecret";
+exports.emailUser = process.env.EMAIL_USER || "";
+exports.emailPass = process.env.EMAIL_PASS || "";
+exports.cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME || "";
+exports.cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || "";
+exports.cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || "";
