@@ -29,6 +29,7 @@ export interface IProduct extends mongoose.Document {
   }[];
   sku: string;
   createdAt: Date;
+
 }
 const productSchema = new mongoose.Schema<IProduct>(
   {
@@ -62,6 +63,7 @@ const productSchema = new mongoose.Schema<IProduct>(
       images: [{ type: String }],
     }],
     sku: { type: String, unique: true, required: true },
+    
   },
   { timestamps: true }
 );
