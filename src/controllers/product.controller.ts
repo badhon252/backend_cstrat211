@@ -251,7 +251,7 @@ export const createProduct = async (req: Request, res: Response) => {
       id: populatedProduct._id,
       name: populatedProduct.name,
       description: populatedProduct.description,
-      price: populatedProduct.price,
+      price: populatedProduct.price * (1 - (populatedProduct.discountParcentage || 0) / 100), // Calculate discounted price
       discountParcentage: populatedProduct.discountParcentage,
       category: (populatedProduct.category as any)?.categoryName || "",
       subcategory: (populatedProduct.subcategory as any)?.subCategoryName || "",
@@ -410,7 +410,7 @@ export const getAllProducts = async (req: Request, res: Response) => {
       id: product._id,
       name: product.name,
       description: product.description,
-      price: product.price,
+      price: product.price * (1 - (product.discountParcentage || 0) / 100), // Calculate discounted price
       discountParcentage: product.discountParcentage,
       category: (product.category as any)?.categoryName || "",
       subcategory: (product.subcategory as any)?.subCategoryName || "",
@@ -655,7 +655,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     const updateData: any = {
       name: req.body.name || product.name,
       description: req.body.description || product.description,
-      price: req.body.price ? parseFloat(req.body.price) : product.price,
+      price: product.price * (1 - (product.discountParcentage || 0) / 100), // Calculate discounted price
       discountParcentage: req.body.discountParcentage,
       type: req.body.type || product.type,
       status: req.body.status || product.status,
