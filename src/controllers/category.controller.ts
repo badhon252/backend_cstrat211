@@ -168,6 +168,8 @@ const getAllCategories = async (
       }
     }
 
+    
+
     // Using aggregation for better performance
     const aggregationPipeline: any[] = [
       { $match: filter },
