@@ -668,73 +668,104 @@ export const customizeProductAndCreateOrder = async (req: Request, res: Response
       });
     }
 
-    // Validate product exists
-    const product = await Product.findById(productId);
-    if (!product) {
-      return res.status(404).json({
-        status: false,
-        message: "Product not found",
-      });
-    }
+    // Start a session for transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    try {
+      // Validate product exists
+      const product = await Product.findById(productId).session(session);
+      if (!product) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({
+          status: false,
+          message: "Product not found",
+        });
+      }
 
-    let frontCustomizationPreviewUrl: string | undefined;
-    let logoImageUrl: string | undefined;
+      // Check if product has sufficient quantity
+      if (product.quantity < quantity) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          status: false,
+          message: `Insufficient stock for product ${product.name}. Available: ${product.quantity}`,
+        });
+      }
 
-    // Upload frontCustomizationPreview to Cloudinary if present
-    if (files?.["frontCustomizationPreview"]?.[0]) {
-      frontCustomizationPreviewUrl = await uploadToCloudinary(
-        files["frontCustomizationPreview"][0].path,
-        "customizations"
-      );
-    }
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
-    // Upload logoImage to Cloudinary if present
-    if (files?.["logoImage"]?.[0]) {
-      logoImageUrl = await uploadToCloudinary(
-        files["logoImage"][0].path,
-        "logos"
-      );
-    }
+      let frontCustomizationPreviewUrl: string | undefined;
+      let logoImageUrl: string | undefined;
 
-    // Create order products array
-    const orderProducts = [
-      {
-        product: productId,
-        quantity,
-        price: product.price,
-        customization: {
-          color,
-          size,
-          frontCustomizationPreview: frontCustomizationPreviewUrl,
-          logoImage: logoImageUrl,
-          userId,
+      // Upload frontCustomizationPreview to Cloudinary if present
+      if (files?.["frontCustomizationPreview"]?.[0]) {
+        frontCustomizationPreviewUrl = await uploadToCloudinary(
+          files["frontCustomizationPreview"][0].path,
+          "customizations"
+        );
+      }
+
+      // Upload logoImage to Cloudinary if present
+      if (files?.["logoImage"]?.[0]) {
+        logoImageUrl = await uploadToCloudinary(
+          files["logoImage"][0].path,
+          "logos"
+        );
+      }
+
+      // Decrement product quantity
+      product.quantity -= quantity;
+      product.inStock = product.quantity > 0;
+      await product.save({ session });
+
+      // Create order products array
+      const orderProducts = [
+        {
+          product: productId,
+          quantity,
+          price: product.price,
+          customization: {
+            color,
+            size,
+            frontCustomizationPreview: frontCustomizationPreviewUrl,
+            logoImage: logoImageUrl,
+            userId,
+          },
         },
-      },
-    ];
+      ];
 
-    // Calculate total amount
-    const totalAmount = product.price * quantity;
+      // Calculate total amount
+      const totalAmount = product.price * quantity;
 
-    // Create and save order
-    const order = new Order({
-      user: userId,
-      products: orderProducts,
-      totalAmount,
-    });
+      // Create and save order
+      const order = new Order({
+        user: userId,
+        products: orderProducts,
+        totalAmount,
+      });
 
-    await order.save();
+      await order.save({ session });
 
-    // Populate order details
-    const populatedOrder = await Order.findById(order._id)
-      .populate("products.product", "name price images");
+      // Commit the transaction
+      await session.commitTransaction();
+      session.endSession();
 
-    res.status(201).json({
-      status: true,
-      message: "Order created successfully with customization",
-      data: populatedOrder,
-    });
+      // Populate order details
+      const populatedOrder = await Order.findById(order._id)
+        .populate("products.product", "name price images");
+
+      res.status(201).json({
+        status: true,
+        message: "Order created successfully with customization",
+        data: populatedOrder,
+      });
+    } catch (error: any) {
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
+    }
   } catch (error: any) {
     console.error("Error customizing product and creating order:", error);
     res.status(500).json({
