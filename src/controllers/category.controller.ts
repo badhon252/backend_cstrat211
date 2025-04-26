@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 import Category from "../models/category.model";
 import { uploadToCloudinary } from "../utils/cloudinary";
 import deleteFromCloudinary from "../utils/deleteFromCloudinary";
+import Product from "../models/product.model";
+import Payment from "../models/payment.model";
+import Order from "../models/order.model";
 
 // create category
 const createCategory = async (
@@ -145,8 +148,7 @@ const getAllCategories = async (
     const { page = "1", limit = "10", search, sales } = req.query;
 
     const pageNumber = Math.max(1, parseInt(page as string)) || 1;
-    const limitNumber =
-      Math.max(1, Math.min(100, parseInt(limit as string))) || 10;
+    const limitNumber = Math.max(1, Math.min(100, parseInt(limit as string))) || 10;
     const skip = (pageNumber - 1) * limitNumber;
 
     const filter: Record<string, any> = {};
@@ -166,13 +168,85 @@ const getAllCategories = async (
       }
     }
 
-    const [total, categories] = await Promise.all([
-      Category.countDocuments(filter),
-      Category.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNumber),
-    ]);
+    // Using aggregation for better performance
+    const aggregationPipeline: any[] = [
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limitNumber },
+      // Lookup products to calculate stock
+      {
+        $lookup: {
+          from: "products",
+          localField: "_id",
+          foreignField: "category",
+          as: "products"
+        }
+      },
+      // Lookup payments and orders to calculate sales
+      {
+        $lookup: {
+          from: "payments",
+          let: { categoryId: "$_id" },
+          pipeline: [
+            { $match: { paymentStatus: "completed" } },
+            { $unwind: "$orderId" },
+            {
+              $lookup: {
+                from: "orders",
+                localField: "orderId",
+                foreignField: "_id",
+                as: "order"
+              }
+            },
+            { $unwind: "$order" },
+            { $unwind: "$order.products" },
+            {
+              $lookup: {
+                from: "products",
+                localField: "order.products.product",
+                foreignField: "_id",
+                as: "orderProduct"
+              }
+            },
+            { $unwind: "$orderProduct" },
+            {
+              $match: {
+                $expr: { $eq: ["$orderProduct.category", "$$categoryId"] }
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                totalSales: { $sum: "$order.products.quantity" }
+              }
+            }
+          ],
+          as: "salesData"
+        }
+      },
+      // Add calculated fields
+      {
+        $addFields: {
+          stock: { $sum: "$products.quantity" },
+          sales: { $ifNull: [{ $arrayElemAt: ["$salesData.totalSales", 0] }, 0] }
+        }
+      },
+      // Project only the fields we want
+      {
+        $project: {
+          products: 0,
+          salesData: 0
+        }
+      }
+    ];
+
+    // Get total count for pagination
+    const totalPromise = Category.countDocuments(filter);
+    // Get aggregated categories
+    const categoriesPromise = Category.aggregate(aggregationPipeline);
+
+    const [total, categories] = await Promise.all([totalPromise, categoriesPromise]);
 
     const totalPages = Math.ceil(total / limitNumber);
 
@@ -193,7 +267,6 @@ const getAllCategories = async (
         results: categories.length,
       },
     });
-    return;
   } catch (error) {
     if (error instanceof Error && error.name === "CastError") {
       res.status(400).json({
@@ -203,6 +276,7 @@ const getAllCategories = async (
       return;
     }
 
+    console.error("Error fetching categories:", error);
     res.status(500).json({
       status: false,
       message: "server error",
