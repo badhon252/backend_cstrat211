@@ -168,7 +168,7 @@ const getAllCategories = async (
       }
     }
 
-    
+
 
     // Using aggregation for better performance
     const aggregationPipeline: any[] = [
@@ -341,6 +341,7 @@ const deleteCategory = async (
     if (deletedCategory.categoryImage) {
       await deleteFromCloudinary(deletedCategory.categoryImage);
     }
+    
 
     res.status(200).json({
       status: true,
