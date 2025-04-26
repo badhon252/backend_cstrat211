@@ -168,24 +168,43 @@ const getAllCategories = async (
       }
     }
 
-
-
     // Using aggregation for better performance
     const aggregationPipeline: any[] = [
       { $match: filter },
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: limitNumber },
-      // Lookup products to calculate stock
+      {
+        $lookup: {
+          from: "subcategories", // assuming your subcategory collection name
+          localField: "_id",
+          foreignField: "category",
+          as: "subcategories"
+        }
+      },
       {
         $lookup: {
           from: "products",
-          localField: "_id",
-          foreignField: "category",
+          let: { categoryId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$category", "$$categoryId"] },
+                    { $in: ["$subcategory", { $ifNull: ["$subcategories._id", []] }] }
+                  ]
+                }
+              }
+            }
+          ],
           as: "products"
         }
       },
-      // Lookup payments and orders to calculate sales
+      // Calculate total stock from all products
+      {
+        $addFields: {
+          stock: { $sum: "$products.quantity" }
+        }
+      },
+      // Lookup completed payments to calculate sales
       {
         $lookup: {
           from: "payments",
@@ -208,39 +227,54 @@ const getAllCategories = async (
                 from: "products",
                 localField: "order.products.product",
                 foreignField: "_id",
-                as: "orderProduct"
+                as: "product"
               }
             },
-            { $unwind: "$orderProduct" },
+            { $unwind: "$product" },
             {
               $match: {
-                $expr: { $eq: ["$orderProduct.category", "$$categoryId"] }
+                $expr: {
+                  $or: [
+                    { $eq: ["$product.category", "$$categoryId"] },
+                    { $in: ["$product.subcategory", { $ifNull: ["$subcategories._id", []] }] }
+                  ]
+                }
               }
             },
             {
               $group: {
                 _id: null,
-                totalSales: { $sum: "$order.products.quantity" }
+                totalSales: { $sum: "$amount" }, // sum of payment amounts
+                totalQuantity: { $sum: "$order.products.quantity" } // sum of product quantities
               }
             }
           ],
           as: "salesData"
         }
       },
-      // Add calculated fields
+      // Add calculated sales fields
       {
         $addFields: {
-          stock: { $sum: "$products.quantity" },
-          sales: { $ifNull: [{ $arrayElemAt: ["$salesData.totalSales", 0] }, 0] }
+          salesAmount: { $ifNull: [{ $arrayElemAt: ["$salesData.totalSales", 0] }, 0] },
+          salesQuantity: { $ifNull: [{ $arrayElemAt: ["$salesData.totalQuantity", 0] }, 0] }
         }
       },
       // Project only the fields we want
       {
         $project: {
-          products: 0,
-          salesData: 0
+          categoryName: 1,
+          description: 1,
+          categoryImage: 1,
+          stock: 1,
+          sales: "$salesAmount", // or "$salesQuantity" depending on what you want to show
+          createdAt: 1,
+          updatedAt: 1,
+          __v: 1
         }
-      }
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limitNumber }
     ];
 
     // Get total count for pagination
