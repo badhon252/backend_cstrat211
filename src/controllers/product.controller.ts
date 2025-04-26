@@ -655,8 +655,10 @@ export const updateProduct = async (req: Request, res: Response) => {
     const updateData: any = {
       name: req.body.name || product.name,
       description: req.body.description || product.description,
-      price: product.price * (1 - (product.discountParcentage || 0) / 100), // Calculate discounted price
-      discountParcentage: req.body.discountParcentage,
+      price: req.body.price ? parseFloat(req.body.price) : product.price, // Update with original price
+      discountParcentage: req.body.discountParcentage
+        ? parseFloat(req.body.discountParcentage)
+        : product.discountParcentage, // Update discount percentage
       type: req.body.type || product.type,
       status: req.body.status || product.status,
       sustainability: req.body.sustainability || product.sustainability,
@@ -678,6 +680,30 @@ export const updateProduct = async (req: Request, res: Response) => {
       sizes: isCustomizable ? sizes : [],
       colors: isCustomizable ? colors : [],
     };
+
+    // Validate price and discountParcentage
+    if (req.body.price) {
+      const price = parseFloat(req.body.price);
+      if (isNaN(price) || price < 0) {
+        return sendResponse(res, 400, false, "Price must be a positive number");
+      }
+    }
+
+    if (req.body.discountParcentage) {
+      const discountParcentage = parseFloat(req.body.discountParcentage);
+      if (
+        isNaN(discountParcentage) ||
+        discountParcentage < 0 ||
+        discountParcentage > 100
+      ) {
+        return sendResponse(
+          res,
+          400,
+          false,
+          "Discount percentage must be between 0 and 100"
+        );
+      }
+    }
 
     // Handle category and subcategory
     if (req.body.category) {
@@ -727,13 +753,12 @@ export const updateProduct = async (req: Request, res: Response) => {
       return sendResponse(res, 404, false, "Product not found after update");
     }
 
-    // Format response
+    // Format response with discounted price
     const responseProduct = {
       id: updatedProduct._id,
       name: updatedProduct.name,
       description: updatedProduct.description,
-      price: updatedProduct.price,
-      discountParcentage: updatedProduct.discountParcentage,
+      price: updatedProduct.price * (1 - (updatedProduct.discountParcentage || 0) / 100), // Return discounted price
       category: (updatedProduct.category as any)?.categoryName || "",
       subcategory: (updatedProduct.subcategory as any)?.subCategoryName || "",
       type: updatedProduct.type,
